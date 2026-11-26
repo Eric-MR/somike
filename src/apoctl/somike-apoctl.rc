@@ -1,0 +1,5 @@
+#define SOMIKE_FILE_DESCRIPTION "Somike injector control (install, uninstall, status)"
+#define SOMIKE_INTERNAL_NAME "somike-apoctl"
+#define SOMIKE_ORIGINAL_FILENAME "somike-apoctl.exe"
+#define SOMIKE_FILE_TYPE VFT_APP
+#include "somike/common/version_info.rc.inc"

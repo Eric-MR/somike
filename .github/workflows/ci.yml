@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.preset }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [debug, ci]   # ci = Release + warnings as errors
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC (x64)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }}
+
+      - name: Upload binaries
+        if: matrix.preset == 'ci'
+        uses: actions/upload-artifact@v4
+        with:
+          name: somike-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            build/ci/bin/somike.exe
+            build/ci/bin/somike-apoctl.exe
+            build/ci/bin/somike_apo.dll
+            build/ci/bin/somike.pdb
+            build/ci/bin/somike-apoctl.pdb
+            build/ci/bin/somike_apo.pdb

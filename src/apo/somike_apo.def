@@ -1,0 +1,4 @@
+LIBRARY somike_apo
+EXPORTS
+    DllCanUnloadNow     PRIVATE
+    DllGetClassObject   PRIVATE

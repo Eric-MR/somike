@@ -1,0 +1,12 @@
+# Normalise all text to LF in the repository and working tree; every tool in
+# the toolchain (MSVC, rc.exe, CMake, PowerShell) reads LF fine.
+* text=auto eol=lf
+
+# Batch files must stay CRLF for cmd.exe.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets
+*.ico binary
+*.png binary
+*.wav binary

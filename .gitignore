@@ -1,0 +1,21 @@
+# Build output (all CMake presets build below build/)
+/build/
+/out/
+
+# Local CMake overrides
+CMakeUserPresets.json
+
+# IDE / editor state
+.vs/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.user
+*.suo
+*.sln.docstates
+
+# Logs and OS clutter
+*.log
+Thumbs.db
+Desktop.ini
+.DS_Store
