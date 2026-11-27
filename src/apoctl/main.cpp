@@ -6,9 +6,10 @@
 //   somike-apoctl install   [--endpoint <id>|default] [--strategy auto|composite|replace]
 //                           [--restart-audio] [--dry-run]
 //   somike-apoctl uninstall [--endpoint <id>|default | --all] [--restart-audio]
+//   somike-apoctl restart-audio
 //
 // Common: --report <file>  also write all output to <file> (UTF-8).
-// install/uninstall must run elevated; list/status work unelevated.
+// install/uninstall/restart-audio must run elevated; list/status work unelevated.
 #include <windows.h>
 
 #include <algorithm>
@@ -112,11 +113,12 @@ void PrintUsage(Output& out) {
     out.Line(L"  somike-apoctl install   [--endpoint <id>|default] [--strategy auto|composite|replace]");
     out.Line(L"                          [--restart-audio] [--dry-run]");
     out.Line(L"  somike-apoctl uninstall [--endpoint <id>|default | --all] [--restart-audio]");
+    out.Line(L"  somike-apoctl restart-audio   (reloads all audio effects, e.g. after an update)");
     out.Line();
     out.Line(L"Options:");
     out.Line(L"  --report <file>   also write all output to <file> (UTF-8)");
     out.Line();
-    out.Line(L"install/uninstall require an elevated (administrator) prompt.");
+    out.Line(L"install/uninstall/restart-audio require an elevated (administrator) prompt.");
     out.Line(L"Exit codes: 0 ok, 1 failure, 2 usage, 3 refused (pick --strategy), 4 needs elevation");
 }
 
@@ -438,6 +440,24 @@ int CommandUninstall(const Options& options, Output& out) {
     return exit_code;
 }
 
+// Used by the setup program after replacing an APO DLL that audiodg.exe had
+// loaded: the new version only runs once the audio engine restarts.
+int CommandRestartAudio(Output& out) {
+    if (!inst::IsProcessElevated()) {
+        out.Line(L"restart-audio must run elevated (administrator).");
+        return kExitNeedsElevation;
+    }
+    out.Line(L"Restarting Windows Audio (all audio pauses briefly)...");
+    inst::Report report;
+    const HRESULT hr = inst::RestartAudioService(report);
+    out.Lines(report);
+    if (FAILED(hr)) {
+        out.Line(L"Could not restart the audio service: " + win32::FormatHResult(hr) + L". Please reboot.");
+        return kExitFailure;
+    }
+    return kExitOk;
+}
+
 }  // namespace
 
 int wmain(int argc, wchar_t** argv) {
@@ -459,6 +479,8 @@ int wmain(int argc, wchar_t** argv) {
         exit_code = CommandInstall(*options, out);
     } else if (options->command == L"uninstall") {
         exit_code = CommandUninstall(*options, out);
+    } else if (options->command == L"restart-audio") {
+        exit_code = CommandRestartAudio(out);
     } else {
         PrintUsage(out);
     }
