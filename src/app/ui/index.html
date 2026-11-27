@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Somike</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -115,10 +116,11 @@
           <svg viewBox="0 0 20 20"><circle cx="4.5" cy="10" r="1.6"/><circle cx="10" cy="10" r="1.6"/><circle cx="15.5" cy="10" r="1.6"/></svg>
         </button>
         <div id="menu" class="menu" role="menu" hidden>
-          <button type="button" role="menuitem" data-cmd="repair">Repair microphone connection</button>
+          <!-- data-installed: only shown while Somike is set up on the selected microphone. -->
+          <button type="button" role="menuitem" data-cmd="repair" data-installed>Repair microphone connection</button>
           <button type="button" role="menuitem" data-cmd="openLogs">Open log folder</button>
-          <hr>
-          <button type="button" role="menuitem" data-cmd="uninstall" class="danger">Remove Somike from this microphone</button>
+          <hr data-installed>
+          <button type="button" role="menuitem" data-cmd="uninstall" data-installed class="danger">Remove Somike from this microphone</button>
         </div>
       </div>
     </footer>
