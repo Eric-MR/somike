@@ -6,6 +6,45 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0-beta.2] - 2026-11-28
+
+Second public pre-release (**beta, not finished**): a real setup program
+instead of a zip, automatic tests on fresh Windows machines and a round of UI
+fixes.
+
+### Added
+- **Setup program** `Somike-Setup-<version>.exe` (replaces the zip). Installs
+  to `C:\Program Files\Somike` with a Start menu entry, connects Somike to the
+  default microphone in the same Windows prompt, installs the WebView2
+  Runtime when it is missing, and speaks English and German. Running a newer
+  setup program updates in place (closes Somike, replaces the in-use APO,
+  restarts Windows Audio, keeps settings). Uninstalling via *Settings → Apps*
+  restores every microphone first. It refuses ARM64 Windows and Windows
+  builds below 20348 with a clear message.
+- Every build is installed, started, updated and uninstalled automatically on
+  fresh Windows Server 2022 and 2025 VMs, and setup is checked to refuse
+  Windows 11 ARM64 (`scripts/smoke-test.ps1`); releases are published only
+  after these tests pass.
+- `somike-apoctl restart-audio`.
+- `tools/ui-dev/matrix.mjs`: UI test matrix (every state at six window sizes
+  and display scales, layout and console checks, screenshots).
+
+### Fixed
+- UI: controls stuck out of narrow windows when the microphone is muted in
+  Windows; toasts were squeezed and drawn under the live button; on laptops
+  at 125/150 % scaling "Go live" and "Set up" were out of view (compact
+  layout, app tiles scroll inside their card); app names were cut off in a
+  maximized window; the microphone list was empty without a hint when no
+  microphone is connected; the menu offered Repair/Remove before setup.
+- UI accessibility: status texts were re-announced by screen readers several
+  times per second; menu state, Escape and arrow-key navigation fixed.
+- Settings are saved when Windows logs off or shuts down, and when the setup
+  program closes Somike.
+
+### Changed
+- Requirements stated correctly: Windows 11 (build 20348+). Windows 10 never
+  received that build, so it was never supported.
+
 ## [0.2.0-beta.1] - 2026-11-27
 
 First public pre-release. **Beta: not finished**, made for testing and
@@ -83,5 +122,6 @@ Internal foundation; never published.
   voice", start/stop button, global hotkey Ctrl+Alt+M, live injector status.
 - CMake presets, build script, GitHub Actions CI, unit tests.
 
-[Unreleased]: https://github.com/Eric-MR/somike/compare/v0.2.0-beta.1...HEAD
+[Unreleased]: https://github.com/Eric-MR/somike/compare/v0.2.0-beta.2...HEAD
+[0.2.0-beta.2]: https://github.com/Eric-MR/somike/compare/v0.2.0-beta.1...v0.2.0-beta.2
 [0.2.0-beta.1]: https://github.com/Eric-MR/somike/releases/tag/v0.2.0-beta.1

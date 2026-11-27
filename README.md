@@ -3,7 +3,7 @@
 [![CI](https://github.com/Eric-MR/somike/actions/workflows/ci.yml/badge.svg)](https://github.com/Eric-MR/somike/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/Eric-MR/somike?include_prereleases&sort=semver&label=release)](https://github.com/Eric-MR/somike/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Platform: Windows 10/11 x64](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20x64-0078d4)
+![Platform: Windows 11 x64](https://img.shields.io/badge/platform-Windows%2011%20x64-0078d4)
 
 Route the audio of any Windows application into your **real, physical
 microphone**, so Discord, games and other voice chats receive it as mic
@@ -11,8 +11,8 @@ input. No virtual audio device is created, and the microphone selection in
 your other apps stays exactly as it is.
 
 > [!WARNING]
-> **Beta, not finished.** Somike is in public beta (`0.2.0-beta.1`) for
-> testing and feedback. The full pipeline works end to end on real hardware
+> **Beta, not finished.** Somike is in public beta for testing and
+> feedback. The full pipeline works end to end on real hardware
 > (Windows 11 25H2, USB headset microphone; Spotify into Discord), but expect
 > rough edges, and the binaries are not code-signed yet.
 > See [Limitations](#limitations) and please
@@ -31,7 +31,7 @@ your other apps stays exactly as it is.
 ```
 
 1. **Capture**: `somike.exe` records the selected application's output with
-   the WASAPI *process loopback* API (Windows 11 / Windows 10 build 20348+).
+   the WASAPI *process loopback* API (Windows build 20348+, i.e. Windows 11).
 2. **Transport**: audio goes into a lock-free ring buffer in a shared
    memory-mapped file.
 3. **Inject**: a small *Audio Processing Object* (APO), registered as the
@@ -45,18 +45,21 @@ what the trade-offs are, is in [docs/feasibility.md](docs/feasibility.md).
 
 ## Quick start
 
-Requirements: Windows 11 (or Windows 10 build 20348+), x64.
+Requirements: **Windows 11** (x64) and a microphone. Windows 10 is not
+supported (per-app capture needs build 20348+), nor are ARM64 PCs yet.
 
-1. Download `somike-<version>-win-x64.zip` from the
-   [latest release](https://github.com/Eric-MR/somike/releases), extract it
-   anywhere and start `somike.exe`. The binaries are not code-signed yet, so
-   SmartScreen may warn ("More info → Run anyway"); with *Smart App Control*
-   on, Windows blocks them (see [Limitations](#limitations)).
-   The first time, it asks to **Set up** your microphone
-   (one click + the Windows permission prompt; sound pauses for a second).
+1. Download **`Somike-Setup-<version>.exe`** from the
+   [latest release](https://github.com/Eric-MR/somike/releases) and run it.
+   Keep **Connect Somike to my default microphone** checked: one Windows
+   prompt, and sound pauses for a second. The setup program is not
+   code-signed yet, so SmartScreen may warn ("More info → Run anyway"); with
+   *Smart App Control* on, Windows blocks it (see [Limitations](#limitations)).
 2. Click the app you want to hear in your mic. Apps that are playing show up
    automatically with their icon; *All system audio* is always there.
 3. Press **Go live** (or **Ctrl+Alt+M** anywhere, e.g. in a game).
+
+For another microphone, pick it at the bottom of the window and click
+**Set up** once.
 
 It is plug and play: if the chosen app is not running yet, Somike shows
 *Waiting* and connects the moment it starts; if the app or Windows Audio
@@ -65,10 +68,12 @@ are on the same screen; your choices are remembered.
 
 ![Somike live with Spotify](docs/images/app-live.png)
 
-To remove Somike from the microphone again, choose **Remove Somike from this
-microphone** in the **⋯** menu, then delete the folder.
+To update, run the new setup program (it keeps your settings). To uninstall,
+use *Settings → Apps → Installed apps → Somike*; this also restores every
+microphone exactly as it was. **Remove Somike from this microphone** in the
+**⋯** menu does that for one microphone only.
 
-The command-line tool covers the same and more:
+The command-line tools in `C:\Program Files\Somike` cover the same and more:
 
 ```powershell
 somike-apoctl list                      # microphones + injector state
@@ -86,10 +91,12 @@ and Ninja:
 
 ```powershell
 ./scripts/build.ps1 -Preset release        # builds + runs unit tests
+./scripts/build-installer.ps1              # Somike-Setup-<version>.exe (needs Inno Setup 6)
 ```
 
-The binaries end up in `build/release/bin`. Details, debugging the APO and
-the release process: [docs/building.md](docs/building.md).
+The binaries end up in `build/release/bin`, the setup program in
+`build/installer`. Details, debugging the APO, the UI and smoke tests and the
+release process: [docs/building.md](docs/building.md).
 
 ## Repository layout
 
@@ -132,6 +139,9 @@ Please report security problems privately as described in
 - **Code signing**: with *Smart App Control* or WDAC enforcing, Windows blocks
   unsigned binaries, including the APO inside `audiodg.exe`. Release builds
   must be signed.
+- **Windows 11 only**: per-app capture (process loopback) needs build 20348+,
+  which Windows 10 never got. **ARM64** Windows runs a native ARM64 audio
+  engine that cannot load the x64 APO; the setup program refuses both.
 - **Exclusive-mode streams** bypass all effects, so apps that open the mic
   that way (rare for voice apps) don't get the routed audio. Raw-mode capture,
   which Discord uses, is covered.

@@ -30,7 +30,48 @@ ctest --preset debug
 
 Output: `build/<preset>/bin/` holds `somike.exe`, `somike-apoctl.exe` and
 `somike_apo.dll` side by side. `cmake --install build/release` produces a
-portable folder (the same content as the release zip).
+portable folder (the content of the setup program).
+
+## Setup program
+
+[`packaging/somike.iss`](../packaging/somike.iss) (Inno Setup 6.3+) builds
+`Somike-Setup-<version>.exe`:
+
+```powershell
+winget install JRSoftware.InnoSetup        # once (--scope user works without admin)
+./scripts/build.ps1 -Preset release
+./scripts/build-installer.ps1 -DownloadWebView2   # -> build/installer/
+```
+
+`-DownloadWebView2` bundles Microsoft's WebView2 bootstrapper (signature is
+checked), which the setup program runs only when the WebView2 Runtime is
+missing. What the setup program does on install, update and uninstall is
+described at the top of the script.
+
+## Testing on other machines
+
+[`scripts/smoke-test.ps1`](../scripts/smoke-test.ps1) installs a setup
+program, checks files and registration, starts the real app and drives its UI
+(`tools/ui-dev/drive.mjs`), updates it while it runs, uninstalls it and checks
+that nothing is left behind. Run it elevated on a **test** machine (it
+uninstalls Somike at the end):
+
+```powershell
+./scripts/smoke-test.ps1 -Setup build/installer/Somike-Setup-0.2.0-beta.2.exe
+```
+
+CI runs it for every push and pull request on fresh GitHub-hosted VMs
+([`smoke-test.yml`](../.github/workflows/smoke-test.yml)): Windows Server 2022
+(build 20348, the oldest supported Windows) and Windows Server 2025 (build
+26100, the base of Windows 11 24H2), and checks that setup refuses Windows 11
+ARM64. Results, logs and a screenshot of the real window are uploaded as
+`smoke-*` artifacts and shown in the run summary.
+
+The hosted VMs have **no audio devices**, and GitHub's runners cannot load a
+virtual audio driver (no test signing; Windows Server only accepts
+Microsoft-certified kernel drivers), so the audio path itself (APO in
+`audiodg.exe`, raw/communications modes) is verified on real hardware with
+`somike-selftest --modes`.
 
 ## Releases
 
@@ -46,10 +87,11 @@ tag `v<version>` is pushed:
    and `git push origin main v0.2.0-beta.2`.
 
 The workflow refuses a tag that differs from the CMake version, builds the
-`ci` preset, runs the tests, and publishes the zip, a symbols zip (PDBs) and
-`SHA256SUMS.txt` with build provenance attestations. Versions with a suffix
-(`-beta.N`, `-rc.N`) are published as **pre-releases**; the release notes are
-the matching `CHANGELOG.md` section.
+`ci` preset, runs the tests, builds the setup program, smoke-tests it on the
+fresh VMs above and only then publishes `Somike-Setup-<version>.exe`, a
+symbols zip (PDBs) and `SHA256SUMS.txt` with build provenance attestations.
+Versions with a suffix (`-beta.N`, `-rc.N`) are published as
+**pre-releases**; the release notes are the matching `CHANGELOG.md` section.
 
 ## Smart App Control / WDAC
 
@@ -106,7 +148,12 @@ resources. Two ways to iterate quickly:
 
 - **In a browser, with a mock backend**: `node tools/ui-dev/serve.mjs`, then
   open `http://localhost:5799/?scenario=ready` (also `setup`, `live`,
-  `waiting`, `enhancements`, `empty`; add `&still` for screenshots).
+  `waiting`, `enhancements`, `update`, `empty`; add `&still` for screenshots).
+- **Test matrix**: with the preview server running,
+  `node tools/ui-dev/matrix.mjs` renders every scenario plus edge cases (long
+  names, many apps, no microphone, errors, menu, toast) in headless Edge at
+  six window sizes and display scales (100-200 %), checks the layout and the
+  console, and saves a screenshot per case. Exit code 1 if anything is off.
 - **In the real app, without rebuilding**:
   `somike.exe --ui-dir <repo>\src\app\ui` loads the files from disk (reload
   with F5; DevTools enabled).
