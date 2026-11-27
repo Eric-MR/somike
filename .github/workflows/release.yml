@@ -1,0 +1,121 @@
+name: Release
+
+# Pushing a tag v<version> (e.g. v0.2.0-beta.1) builds, tests and publishes a
+# GitHub release. The tag must match the version in CMakeLists.txt; versions
+# with a suffix (-beta.N, -rc.N) are published as pre-releases. See
+# docs/building.md#releases.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write      # create the release
+  id-token: write      # sign the build provenance attestation
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up MSVC (x64)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        run: cmake --preset ci
+
+      - name: Check the tag against the CMake version
+        id: version
+        shell: pwsh
+        run: |
+          $header = Get-Content build/ci/generated/somike/version.h -Raw
+          if ($header -notmatch '#define SOMIKE_VERSION_STRING "([^"]+)"') {
+            throw 'SOMIKE_VERSION_STRING not found in version.h'
+          }
+          $version = $Matches[1]
+          if ("v$version" -ne $env:GITHUB_REF_NAME) {
+            throw "Tag $env:GITHUB_REF_NAME does not match the CMake version v$version"
+          }
+          $prerelease = if ($version.Contains('-')) { 'true' } else { 'false' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$prerelease" >> $env:GITHUB_OUTPUT
+
+      - name: Build
+        run: cmake --build --preset ci
+
+      - name: Test
+        run: ctest --preset ci
+
+      - name: Package
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $name = "somike-$env:VERSION-win-x64"
+          cmake --install build/ci --prefix "dist/$name"
+          if ($LASTEXITCODE) { throw 'cmake --install failed' }
+          Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip"
+
+          $pdbs = 'somike', 'somike-apoctl', 'somike_apo', 'somike-selftest' |
+            ForEach-Object { "build/ci/bin/$_.pdb" }
+          Compress-Archive -Path $pdbs -DestinationPath "dist/$name-symbols.zip"
+
+          # sha256sum format (LF line endings), so `sha256sum -c` works too.
+          $sums = Get-ChildItem dist -Filter *.zip | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+          }
+          [IO.File]::WriteAllText("$PWD/dist/SHA256SUMS.txt", ($sums -join "`n") + "`n")
+          Get-Content dist/SHA256SUMS.txt
+
+      - name: Write release notes
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          $changelog = Get-Content CHANGELOG.md -Raw
+          $heading = '^## \[' + [regex]::Escape($env:VERSION) + '\][^\r\n]*\r?\n'
+          $pattern = '(?ms)' + $heading + '(.*?)(?=^## \[|^\[[^\]]+\]: |\z)'
+          if ($changelog -notmatch $pattern) {
+            throw "CHANGELOG.md has no section for $env:VERSION"
+          }
+          $changes = $Matches[1].Trim()
+
+          $notes = Get-Content .github/release-template.md -Raw
+          $notes = $notes.Replace('{{VERSION}}', $env:VERSION).Replace('{{CHANGES}}', $changes)
+          if ($env:PRERELEASE -eq 'true') {
+            $notes = "> [!WARNING]`n> **Pre-release (beta), not finished.** Made for testing and " +
+              "feedback; expect rough edges. Please report problems as " +
+              "[issues](https://github.com/${{ github.repository }}/issues/new/choose).`n`n" + $notes
+          }
+          [IO.File]::WriteAllText("$PWD/dist/release-notes.md", $notes)
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/*.zip
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          $assets = @((Get-ChildItem dist -Filter *.zip).FullName) + "dist/SHA256SUMS.txt"
+          $kind = if ($env:PRERELEASE -eq 'true') { '--prerelease' } else { '--latest' }
+          gh release create $env:GITHUB_REF_NAME @assets `
+            --title "Somike $env:VERSION" `
+            --notes-file dist/release-notes.md `
+            --verify-tag $kind
+          if ($LASTEXITCODE) { throw 'gh release create failed' }
