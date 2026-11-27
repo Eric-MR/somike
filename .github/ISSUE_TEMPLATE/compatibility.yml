@@ -1,0 +1,62 @@
+name: Compatibility report
+description: Tell us whether Somike works with your microphone, source app or voice app.
+labels: [compatibility]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports that something **works** are just as useful as reports that it doesn't:
+        they show which microphones and apps are covered.
+
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Works
+        - Works with problems
+        - Does not work
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Somike version
+      placeholder: 0.2.0-beta.1
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and build
+      placeholder: Windows 11 25H2, build 26200
+    validations:
+      required: true
+
+  - type: input
+    id: microphone
+    attributes:
+      label: Microphone (model and connection)
+      placeholder: Corsair HS80 (USB) / Realtek on-board jack / Rode NT-USB
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Source app
+      placeholder: Spotify, Chrome, All system audio, ...
+
+  - type: input
+    id: receiver
+    attributes:
+      label: Receiving app
+      placeholder: Discord, TeamSpeak, CS2, OBS, ...
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Settings you changed (e.g. noise suppression), problems, workarounds.

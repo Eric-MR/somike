@@ -1,5 +1,17 @@
 # Contributing
 
+Thanks for helping! Somike is in beta, so reports from real setups are the
+most valuable contribution:
+
+- **Something broken?** Open a [bug report](https://github.com/Eric-MR/somike/issues/new?template=bug_report.yml)
+  with the output of `somike-apoctl status`.
+- **Works (or not) with your microphone or app?** A
+  [compatibility report](https://github.com/Eric-MR/somike/issues/new?template=compatibility.yml)
+  takes a minute and helps everyone.
+- **Security problem?** Report it privately, see [SECURITY.md](SECURITY.md).
+
+Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+
 ## Build and test
 
 ```powershell
@@ -32,8 +44,27 @@ the APO inside `audiodg.exe`.
 
 ## Commits and pull requests
 
+- `main` is always releasable. Work on a branch (`feat/...`, `fix/...`,
+  `docs/...`) and open a pull request against `main`; CI (Debug and
+  Release with warnings as errors, plus unit tests) must pass.
 - Use [Conventional Commits](https://www.conventionalcommits.org/)
   (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `build:`, `ci:`).
 - One logical change per pull request, with tests for new logic.
 - Record significant design decisions as a new ADR in `docs/adr/`.
 - Update `CHANGELOG.md` under *Unreleased*.
+
+## Labels
+
+| Label | Meaning |
+|-------|---------|
+| `bug`, `enhancement`, `documentation`, `compatibility` | Kind of issue |
+| `area: apo`, `area: app`, `area: routing`, `area: installer`, `area: build` | Part of the code |
+| `needs-triage`, `needs-info`, `confirmed` | Triage state |
+| `good first issue`, `help wanted` | Good places to start |
+
+## Releases
+
+Versions follow [Semantic Versioning](https://semver.org/); `-beta.N` and
+`-rc.N` versions are published as GitHub pre-releases. Pushing a tag
+`v<version>` builds and publishes the release automatically, see
+[docs/building.md](docs/building.md#releases).

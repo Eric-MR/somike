@@ -1,0 +1,74 @@
+name: Bug report
+description: Something does not work as described.
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing Somike! Please check the
+        [known limitations](https://github.com/Eric-MR/somike#limitations) first.
+        Security problems belong in a [private report](https://github.com/Eric-MR/somike/security/advisories/new), not here.
+
+  - type: input
+    id: version
+    attributes:
+      label: Somike version
+      description: The release you downloaded, or the first line printed by `somike-apoctl`.
+      placeholder: 0.2.0-beta.1
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and build
+      description: Run `winver`.
+      placeholder: Windows 11 25H2, build 26200
+    validations:
+      required: true
+
+  - type: input
+    id: microphone
+    attributes:
+      label: Microphone
+      placeholder: Corsair HS80 (USB headset)
+    validations:
+      required: true
+
+  - type: input
+    id: apps
+    attributes:
+      label: Source app and receiving app
+      description: Which app did you route, and which app should hear it?
+      placeholder: Spotify -> Discord
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of `somike-apoctl status`
+      description: Run it in the Somike folder while the problem happens.
+      render: text
+
+  - type: textarea
+    id: selftest
+    attributes:
+      label: Output of `somike-selftest --modes` (optional)
+      description: Plays a quiet test tone into your mic for about ten seconds; leave voice calls first.
+      render: text
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: |
+        The last lines of `%LOCALAPPDATA%\Somike\somike.log` and `%ProgramData%\Somike\apo.log`.
+        Remove anything you consider private.
+      render: text
