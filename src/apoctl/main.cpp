@@ -195,6 +195,12 @@ std::optional<inst::EndpointId> ResolveEndpoint(const std::wstring& argument, Ou
     return parsed;
 }
 
+// Exit code when ResolveEndpoint failed: no microphone at all is a failure of
+// the environment (1), a malformed --endpoint argument is a usage error (2).
+int UnresolvedEndpointExitCode(const std::wstring& argument) {
+    return argument.empty() || text::EqualsIgnoreCase(argument, L"default") ? kExitFailure : kExitUsage;
+}
+
 std::wstring Join(const std::vector<std::wstring>& items) {
     std::wstring joined;
     for (const std::wstring& item : items) {
@@ -261,7 +267,7 @@ int CommandList(Output& out) {
 int CommandStatus(const Options& options, Output& out) {
     const auto id = ResolveEndpoint(options.endpoint, out);
     if (!id) {
-        return kExitUsage;
+        return UnresolvedEndpointExitCode(options.endpoint);
     }
     const inst::FxSnapshot snapshot = inst::ReadFxSnapshot(*id);
 
@@ -309,7 +315,7 @@ int CommandStatus(const Options& options, Output& out) {
 int CommandInstall(const Options& options, Output& out) {
     const auto id = ResolveEndpoint(options.endpoint, out);
     if (!id) {
-        return kExitUsage;
+        return UnresolvedEndpointExitCode(options.endpoint);
     }
     out.Line(L"Microphone: " + EndpointName(id->full));
     out.Line(L"Strategy:   " + std::wstring(inst::ToString(options.strategy)));
@@ -397,7 +403,7 @@ int CommandUninstall(const Options& options, Output& out) {
     } else if (const auto id = ResolveEndpoint(options.endpoint, out)) {
         targets.push_back(*id);
     } else {
-        return kExitUsage;
+        return UnresolvedEndpointExitCode(options.endpoint);
     }
 
     int exit_code = kExitOk;
