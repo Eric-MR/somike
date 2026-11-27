@@ -1,27 +1,29 @@
 name: Release
 
-# Pushing a tag v<version> (e.g. v0.2.0-beta.1) builds, tests and publishes a
-# GitHub release. The tag must match the version in CMakeLists.txt; versions
-# with a suffix (-beta.N, -rc.N) are published as pre-releases. See
-# docs/building.md#releases.
+# Pushing a tag v<version> (e.g. v0.2.0-beta.2) builds and tests Somike,
+# builds the setup program, smoke-tests it on fresh VMs and only then
+# publishes a GitHub release. The tag must match the version in
+# CMakeLists.txt; versions with a suffix (-beta.N, -rc.N) are published as
+# pre-releases. See docs/building.md#releases.
 
 on:
   push:
     tags: ['v*']
 
 permissions:
-  contents: write      # create the release
-  id-token: write      # sign the build provenance attestation
-  attestations: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build and publish
+  build:
+    name: Build
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
 
     steps:
       - uses: actions/checkout@v7
@@ -56,32 +58,62 @@ jobs:
       - name: Test
         run: ctest --preset ci
 
-      - name: Package
+      - name: Build the setup program
+        shell: pwsh
+        run: ./scripts/build-installer.ps1 -Preset ci -OutputDir dist -DownloadWebView2
+
+      - name: Package the debug symbols
         shell: pwsh
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          $name = "somike-$env:VERSION-win-x64"
-          cmake --install build/ci --prefix "dist/$name"
-          if ($LASTEXITCODE) { throw 'cmake --install failed' }
-          Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip"
-
           $pdbs = 'somike', 'somike-apoctl', 'somike_apo', 'somike-selftest' |
             ForEach-Object { "build/ci/bin/$_.pdb" }
-          Compress-Archive -Path $pdbs -DestinationPath "dist/$name-symbols.zip"
+          Compress-Archive -Path $pdbs -DestinationPath "dist/Somike-$env:VERSION-symbols.zip"
 
-          # sha256sum format (LF line endings), so `sha256sum -c` works too.
-          $sums = Get-ChildItem dist -Filter *.zip | Sort-Object Name | ForEach-Object {
-            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
-          }
-          [IO.File]::WriteAllText("$PWD/dist/SHA256SUMS.txt", ($sums -join "`n") + "`n")
-          Get-Content dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-files
+          if-no-files-found: error
+          path: |
+            dist/Somike-Setup-*.exe
+            dist/Somike-*-symbols.zip
+
+  smoke:
+    name: Smoke test
+    needs: build
+    uses: ./.github/workflows/smoke-test.yml
+    with:
+      artifact: release-files
+
+  publish:
+    name: Publish
+    needs: [build, smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # create the release
+      id-token: write      # sign the build provenance attestation
+      attestations: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-files
+          path: dist
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum Somike-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
 
       - name: Write release notes
         shell: pwsh
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          VERSION: ${{ needs.build.outputs.version }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
         run: |
           $changelog = Get-Content CHANGELOG.md -Raw
           $heading = '^## \[' + [regex]::Escape($env:VERSION) + '\][^\r\n]*\r?\n'
@@ -103,19 +135,19 @@ jobs:
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: dist/*.zip
+          subject-path: |
+            dist/Somike-Setup-*.exe
+            dist/Somike-*-symbols.zip
 
       - name: Publish the release
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          VERSION: ${{ needs.build.outputs.version }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
         run: |
-          $assets = @((Get-ChildItem dist -Filter *.zip).FullName) + "dist/SHA256SUMS.txt"
-          $kind = if ($env:PRERELEASE -eq 'true') { '--prerelease' } else { '--latest' }
-          gh release create $env:GITHUB_REF_NAME @assets `
-            --title "Somike $env:VERSION" `
-            --notes-file dist/release-notes.md `
-            --verify-tag $kind
-          if ($LASTEXITCODE) { throw 'gh release create failed' }
+          kind=--latest
+          if [ "$PRERELEASE" = "true" ]; then kind=--prerelease; fi
+          gh release create "$GITHUB_REF_NAME" dist/Somike-* dist/SHA256SUMS.txt \
+            --title "Somike $VERSION" \
+            --notes-file dist/release-notes.md \
+            --verify-tag "$kind"
