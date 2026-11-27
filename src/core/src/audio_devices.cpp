@@ -1,6 +1,7 @@
 #include "somike/core/audio_devices.h"
 
 #include <windows.h>
+#include <endpointvolume.h>
 #include <mmdeviceapi.h>
 #include <propvarutil.h>
 #include <wrl/client.h>
@@ -95,6 +96,22 @@ std::vector<AudioEndpoint> EnumerateCaptureEndpoints() {
         endpoints.push_back(std::move(endpoint));
     }
     return endpoints;
+}
+
+std::optional<bool> IsCaptureEndpointMuted(const std::wstring& endpoint_id) {
+    const ComPtr<IMMDeviceEnumerator> enumerator = CreateEnumerator();
+    ComPtr<IMMDevice> device;
+    ComPtr<IAudioEndpointVolume> volume;
+    if (!enumerator || FAILED(enumerator->GetDevice(endpoint_id.c_str(), &device)) ||
+        FAILED(device->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr,
+                                reinterpret_cast<void**>(volume.GetAddressOf())))) {
+        return std::nullopt;
+    }
+    BOOL muted = FALSE;
+    if (FAILED(volume->GetMute(&muted))) {
+        return std::nullopt;
+    }
+    return muted != FALSE;
 }
 
 std::optional<std::wstring> DefaultCaptureEndpointId() {

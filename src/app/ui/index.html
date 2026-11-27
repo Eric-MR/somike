@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Somike</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app" class="app" data-view="loading">
+    <header class="topbar">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+          <defs>
+            <linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#ec4899"/>
+            </linearGradient>
+          </defs>
+          <rect width="32" height="32" rx="9" fill="url(#logo-grad)"/>
+          <rect x="12.5" y="7" width="7" height="12" rx="3.5" fill="#fff"/>
+          <path d="M9.5 15.5a6.5 6.5 0 0 0 13 0M16 22v3.5" stroke="#fff" stroke-width="2"
+                stroke-linecap="round" fill="none"/>
+        </svg>
+        <span class="brand-name">Somike</span>
+      </div>
+      <div id="pill" class="pill" data-tone="idle"><span class="dot"></span><span id="pill-text">Starting</span></div>
+    </header>
+
+    <!-- One-time setup: shown while the injector is not on the selected microphone. -->
+    <section id="setup" class="setup" hidden>
+      <div class="setup-art" aria-hidden="true">
+        <div class="art-wave w1"></div><div class="art-wave w2"></div><div class="art-wave w3"></div>
+        <svg viewBox="0 0 48 48"><rect x="17" y="6" width="14" height="24" rx="7" fill="currentColor"/>
+          <path d="M11 23a13 13 0 0 0 26 0M24 36v6" stroke="currentColor" stroke-width="3.2"
+                stroke-linecap="round" fill="none"/></svg>
+      </div>
+      <h1>Connect Somike to your microphone</h1>
+      <p class="lead">Somike plays any app straight into your <b>real</b> microphone, so Discord,
+        games and every voice chat hear it. No virtual device, nothing to change in other apps.</p>
+
+      <label class="field">
+        <span class="field-label">Microphone</span>
+        <select id="setup-mic" class="select"></select>
+      </label>
+
+      <ol class="steps">
+        <li><span class="step-n">1</span><div><b>Click “Set up”</b><small>Only once per microphone</small></div></li>
+        <li><span class="step-n">2</span><div><b>Allow the Windows prompt</b><small>Administrator rights are needed once</small></div></li>
+        <li><span class="step-n">3</span><div><b>Sound pauses for a second</b><small>Windows Audio restarts, then you are ready</small></div></li>
+      </ol>
+
+      <button id="setup-btn" class="btn btn-primary btn-big" type="button">
+        <span class="spinner" aria-hidden="true"></span><span class="btn-label">Set up</span>
+      </button>
+      <p id="setup-msg" class="setup-msg" role="status"></p>
+    </section>
+
+    <!-- Everyday screen. -->
+    <main id="main" class="main" hidden>
+      <div id="banner" class="banner" role="alert" hidden>
+        <span id="banner-text"></span>
+        <button id="banner-btn" class="btn btn-small" type="button"></button>
+      </div>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Play into my mic</h2>
+          <button id="refresh" class="icon-btn" type="button" title="Refresh the app list" aria-label="Refresh">
+            <svg viewBox="0 0 20 20"><path d="M16 10a6 6 0 1 1-1.76-4.24M16 4v3.5h-3.5" fill="none"
+              stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div id="sources" class="sources" role="radiogroup" aria-label="Audio source"></div>
+        <p id="sources-hint" class="hint" hidden>Start playing something (Spotify, a video, a game) and it shows up here.</p>
+      </section>
+
+      <section class="live-zone">
+        <button id="live-btn" class="live-btn" type="button" aria-pressed="false">
+          <span class="live-glow" aria-hidden="true"></span>
+          <svg class="live-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <rect x="17" y="6" width="14" height="24" rx="7" fill="currentColor"/>
+            <path d="M11 23a13 13 0 0 0 26 0M24 36v6" stroke="currentColor" stroke-width="3.2"
+                  stroke-linecap="round" fill="none"/>
+          </svg>
+          <span id="live-text" class="live-text">Go live</span>
+        </button>
+        <p id="live-sub" class="live-sub">Pick what to play, then go live</p>
+        <div class="meter" aria-hidden="true"><div id="meter-fill" class="meter-fill"></div></div>
+      </section>
+
+      <section class="card controls">
+        <div class="row">
+          <div class="row-label"><span>Volume</span><small>How loud it is in your mic</small></div>
+          <div class="slider">
+            <input id="gain" type="range" min="0" max="200" step="1" value="100" aria-label="Volume">
+            <output id="gain-out" for="gain">100%</output>
+          </div>
+        </div>
+        <div class="row">
+          <div class="row-label"><span>Mute my voice</span><small>Only the app is heard</small></div>
+          <label class="switch"><input id="mute" type="checkbox" aria-label="Mute my voice"><span class="track"></span></label>
+        </div>
+        <div class="row">
+          <div class="row-label"><span>Microphone</span><small id="mic-sub">Connected</small></div>
+          <select id="mic" class="select select-compact" aria-label="Microphone"></select>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span id="footer-status" class="footer-status" data-tone="idle"><span class="dot"></span><span id="footer-text">Starting</span></span>
+      <span class="keys" title="Global shortcut"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>M</kbd></span>
+      <div class="menu-wrap">
+        <button id="more" class="icon-btn" type="button" aria-label="More" aria-haspopup="menu" aria-expanded="false">
+          <svg viewBox="0 0 20 20"><circle cx="4.5" cy="10" r="1.6"/><circle cx="10" cy="10" r="1.6"/><circle cx="15.5" cy="10" r="1.6"/></svg>
+        </button>
+        <div id="menu" class="menu" role="menu" hidden>
+          <button type="button" role="menuitem" data-cmd="repair">Repair microphone connection</button>
+          <button type="button" role="menuitem" data-cmd="openLogs">Open log folder</button>
+          <hr>
+          <button type="button" role="menuitem" data-cmd="uninstall" class="danger">Remove Somike from this microphone</button>
+        </div>
+      </div>
+    </footer>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

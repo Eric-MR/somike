@@ -8,28 +8,13 @@
 #include <iterator>
 #include <map>
 
-#include "somike/common/unique_handle.h"
+#include "somike/core/process_tree.h"
 
 namespace somike::core {
 
 using Microsoft::WRL::ComPtr;
 
 namespace {
-
-std::wstring ExecutableName(DWORD pid) {
-    win32::UniqueHandle process(::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
-    if (!process) {
-        return {};
-    }
-    wchar_t path[MAX_PATH * 2];
-    DWORD size = static_cast<DWORD>(std::size(path));
-    if (!::QueryFullProcessImageNameW(process.get(), 0, path, &size)) {
-        return {};
-    }
-    std::wstring full(path, size);
-    const auto slash = full.find_last_of(L"\\/");
-    return slash == std::wstring::npos ? full : full.substr(slash + 1);
-}
 
 void CollectSessions(IMMDevice* device, DWORD own_pid, std::map<DWORD, AudioSource>& sources) {
     ComPtr<IAudioSessionManager2> manager;
@@ -103,7 +88,10 @@ std::vector<AudioSource> EnumerateAudioSources() {
 
     std::vector<AudioSource> result;
     for (auto& [pid, source] : by_pid) {
-        source.executable = ExecutableName(pid);
+        source.image_path = ProcessImagePath(pid);
+        const auto slash = source.image_path.find_last_of(L"\\/");
+        source.executable =
+            slash == std::wstring::npos ? source.image_path : source.image_path.substr(slash + 1);
         if (source.executable.empty()) {
             continue;  // process exited or is not accessible
         }

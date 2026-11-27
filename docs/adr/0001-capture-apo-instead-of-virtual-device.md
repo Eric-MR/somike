@@ -1,6 +1,8 @@
 # ADR 0001: Inject through a capture APO instead of a virtual audio device
 
-- Status: accepted
+- Status: accepted; the effect slot is amended by
+  [ADR 0005](0005-endpoint-effect-instead-of-stream-effect.md) (endpoint
+  effect instead of stream effect, so raw-mode streams are reached)
 - Date: 2026-11-26
 
 ## Context

@@ -4,6 +4,8 @@
 
 #include "injector_apo.h"
 #include "module.h"
+#include "somike/common/guid.h"
+#include "somike/common/log.h"
 
 namespace somike::apo {
 
@@ -39,15 +41,24 @@ HRESULT ClassFactory::CreateInstance(IUnknown* outer, REFIID riid, void** object
         return E_POINTER;
     }
     *object = nullptr;
-    if (outer != nullptr) {
+    // COM aggregation rule: an aggregated object must be asked for IUnknown
+    // (it returns its non-delegating unknown). The audio engine aggregates
+    // every APO it creates.
+    if (outer != nullptr && riid != __uuidof(IUnknown)) {
+        log::Warn(L"APO: aggregated CreateInstance for {} refused", guid::ToString(riid));
         return CLASS_E_NOAGGREGATION;
     }
-    auto* apo = new (std::nothrow) InjectorApo();
+    auto* apo = new (std::nothrow) InjectorApo(outer);
     if (apo == nullptr) {
         return E_OUTOFMEMORY;
     }
-    const HRESULT hr = apo->QueryInterface(riid, object);
-    apo->Release();  // drop the constructor reference; QI holds its own
+    IUnknown* inner = apo->inner();
+    const HRESULT hr = inner->QueryInterface(riid, object);
+    inner->Release();  // drop the constructor reference; QI holds its own
+    if (FAILED(hr)) {
+        log::Warn(L"APO: CreateInstance({}) failed: 0x{:08X}", guid::ToString(riid),
+                  static_cast<unsigned>(hr));
+    }
     return hr;
 }
 

@@ -27,8 +27,11 @@ inline constexpr wchar_t kCompositeStreamEffect[] = L"{d04e05a6-594b-4fb6-a80d-0
 inline constexpr wchar_t kCompositeModeEffect[] = L"{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},14";
 inline constexpr wchar_t kCompositeEndpointEffect[] = L"{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},15";
 inline constexpr wchar_t kStreamProcessingModes[] = L"{d3993a3f-99c2-4402-b5ec-a92a0367664b},5";
+// PKEY_EFX_ProcessingModes_Supported_For_Streaming (only DEFAULT is allowed).
+inline constexpr wchar_t kEndpointProcessingModes[] = L"{d3993a3f-99c2-4402-b5ec-a92a0367664b},7";
 
-// Properties key: PKEY_AudioEndpoint_Disable_SysFx ("Audio enhancements" off)
+// PKEY_AudioEndpoint_Disable_SysFx ("Audio enhancements" off). Stored in
+// FxProperties; Windows sets it itself after an effect fails or hangs.
 inline constexpr wchar_t kDisableSysFx[] = L"{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5";
 
 // Signal processing modes
@@ -36,9 +39,10 @@ inline constexpr wchar_t kModeDefault[] = L"{C18E2F7E-933D-4965-B7D1-1EEF228D2AF
 inline constexpr wchar_t kModeCommunications[] = L"{98951333-B9CD-48B1-A0A3-FF40682D73F7}";
 
 inline constexpr const wchar_t* kTrackedValues[] = {
-    kPreMixEffect,        kPostMixEffect,       kStreamEffect,
-    kModeEffect,          kEndpointEffect,      kCompositeStreamEffect,
+    kPreMixEffect,        kPostMixEffect,           kStreamEffect,
+    kModeEffect,          kEndpointEffect,          kCompositeStreamEffect,
     kCompositeModeEffect, kCompositeEndpointEffect, kStreamProcessingModes,
+    kEndpointProcessingModes,
 };
 }  // namespace fx
 
@@ -62,14 +66,25 @@ struct FxSnapshot {
 // Reads the current state. Needs only read access (works unelevated).
 [[nodiscard]] FxSnapshot ReadFxSnapshot(const EndpointId& id);
 
+// Somike installs as the endpoint effect (EFX): on a capture endpoint it runs
+// before the split into processing modes, so it also reaches streams opened
+// in raw mode (Discord's voice engine, for example). Version 0.1.0 used the
+// stream-effect slot (SFX), which raw streams skip; those states still need
+// recognising so they can be upgraded and uninstalled.
 enum class InstallState {
     NotInstalled,
-    InstalledStreamEffect,  // our CLSID in PKEY_FX_StreamEffectClsid
-    InstalledComposite,     // our CLSID in PKEY_CompositeFX_StreamEffectClsid
+    InstalledEndpointEffect,     // our CLSID in PKEY_FX_EndpointEffectClsid
+    InstalledCompositeEndpoint,  // our CLSID in PKEY_CompositeFX_EndpointEffectClsid
+    InstalledStreamEffect,       // 0.1.0 layout: PKEY_FX_StreamEffectClsid
+    InstalledComposite,          // 0.1.0 layout: PKEY_CompositeFX_StreamEffectClsid
 };
 
+// Reports the 0.1.0 (stream-effect) layout first: if it is present at all,
+// the endpoint needs an upgrade, even when an endpoint effect exists too.
 [[nodiscard]] InstallState QueryInstallState(const FxSnapshot& snapshot);
 [[nodiscard]] const wchar_t* ToString(InstallState state) noexcept;
+// True for the stream-effect layout, which apps recording in raw mode bypass.
+[[nodiscard]] bool NeedsUpgrade(InstallState state) noexcept;
 [[nodiscard]] bool IsSomikeClsid(std::wstring_view clsid) noexcept;
 
 }  // namespace somike::installer

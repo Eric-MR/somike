@@ -1,18 +1,25 @@
 // somike.exe - entry point of the desktop application.
+//
+// Command line (all optional):
+//   --source <app.exe|system>     select what to play into the mic
+//   --live                        go live right away (e.g. from a shortcut)
+//   --ui-dir <folder>             development: load the UI from disk
+//   --remote-debugging-port <n>   development/testing: DevTools protocol port
 #include <windows.h>
-#include <commctrl.h>
 #include <knownfolders.h>
+#include <shellapi.h>
 #include <shlobj.h>
 
+#include <cwchar>
 #include <string>
 
 #include "app_controller.h"
-#include "main_window.h"
 #include "somike/common/log.h"
 #include "somike/common/unique_handle.h"
 #include "somike/core/com_init.h"
 #include "somike/core/settings.h"
 #include "somike/version.h"
+#include "web_window.h"
 
 namespace {
 
@@ -41,6 +48,36 @@ void InitializeLogging() {
     somike::log::Info(L"Somike {} starting", SOMIKE_VERSION_WSTRING);
 }
 
+struct CommandLine {
+    std::wstring source;
+    bool live = false;
+    somike::app::WindowOptions window;
+};
+
+CommandLine ParseCommandLine() {
+    CommandLine result;
+    int count = 0;
+    LPWSTR* args = ::CommandLineToArgvW(::GetCommandLineW(), &count);
+    if (args == nullptr) {
+        return result;
+    }
+    for (int i = 1; i < count; ++i) {
+        const std::wstring arg = args[i];
+        const bool has_value = i + 1 < count;
+        if (arg == L"--source" && has_value) {
+            result.source = args[++i];
+        } else if (arg == L"--live") {
+            result.live = true;
+        } else if (arg == L"--ui-dir" && has_value) {
+            result.window.ui_directory = args[++i];
+        } else if (arg == L"--remote-debugging-port" && has_value) {
+            result.window.remote_debugging_port = static_cast<int>(std::wcstol(args[++i], nullptr, 10));
+        }
+    }
+    ::LocalFree(args);
+    return result;
+}
+
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE /*previous*/, PWSTR /*command_line*/, int show) {
@@ -54,27 +91,31 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE /*previous*/, PWSTR /*command_
         return 0;
     }
 
+    // WebView2 requires a single-threaded apartment on the UI thread.
     const somike::core::ComInit com(COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     if (!com.usable()) {
         return 1;
     }
-
-    INITCOMMONCONTROLSEX controls{sizeof(controls), ICC_STANDARD_CLASSES | ICC_BAR_CLASSES};
-    ::InitCommonControlsEx(&controls);
     InitializeLogging();
 
+    const CommandLine command_line = ParseCommandLine();
     somike::app::AppController controller(somike::core::DefaultSettingsPath());
-    somike::app::MainWindow window(controller);
+    if (!command_line.source.empty()) {
+        controller.SelectSource(command_line.source);
+    }
+    if (command_line.live) {
+        controller.SetLive(true);
+    }
+
+    somike::app::WebWindow window(controller, command_line.window);
     if (!window.Create(instance, show)) {
         return 1;
     }
 
     MSG message{};
     while (::GetMessageW(&message, nullptr, 0, 0) > 0) {
-        if (!::IsDialogMessageW(window.hwnd(), &message)) {
-            ::TranslateMessage(&message);
-            ::DispatchMessageW(&message);
-        }
+        ::TranslateMessage(&message);
+        ::DispatchMessageW(&message);
     }
     return static_cast<int>(message.wParam);
 }

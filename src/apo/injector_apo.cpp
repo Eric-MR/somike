@@ -92,39 +92,68 @@ HRESULT NegotiateFormat(IAudioMediaType* opposite, IAudioMediaType* requested,
 
 }  // namespace
 
-InjectorApo::InjectorApo() noexcept { ModuleAddRef(); }
+InjectorApo::InjectorApo(IUnknown* outer) noexcept : outer_(outer != nullptr ? outer : &inner_) {
+    ModuleAddRef();
+    log::Info(L"APO instance {} created ({})", static_cast<const void*>(this),
+              outer != nullptr ? L"aggregated" : L"standalone");
+}
 
-InjectorApo::~InjectorApo() { ModuleRelease(); }
+InjectorApo::~InjectorApo() {
+    log::Info(L"APO instance {} destroyed (initialized {}, locked {})", static_cast<const void*>(this),
+              initialized_, locked_);
+    ModuleRelease();
+}
 
 // ---------------------------------------------------------------------------
 // IUnknown
 // ---------------------------------------------------------------------------
+// Delegating IUnknown: every interface we hand out forwards to the controlling
+// unknown, so the aggregator sees one object identity and one ref count.
 HRESULT InjectorApo::QueryInterface(REFIID riid, void** object) noexcept {
+    return outer_->QueryInterface(riid, object);
+}
+
+ULONG InjectorApo::AddRef() noexcept { return outer_->AddRef(); }
+
+ULONG InjectorApo::Release() noexcept { return outer_->Release(); }
+
+// Non-delegating IUnknown: identity and lifetime of the object itself.
+HRESULT InjectorApo::NonDelegatingUnknown::QueryInterface(REFIID riid, void** object) noexcept {
     if (object == nullptr) {
         return E_POINTER;
     }
     *object = nullptr;
-    if (riid == __uuidof(IUnknown) || riid == __uuidof(IAudioProcessingObject)) {
-        *object = static_cast<IAudioProcessingObject*>(this);
-    } else if (riid == __uuidof(IAudioProcessingObjectRT)) {
-        *object = static_cast<IAudioProcessingObjectRT*>(this);
-    } else if (riid == __uuidof(IAudioProcessingObjectConfiguration)) {
-        *object = static_cast<IAudioProcessingObjectConfiguration*>(this);
-    } else if (riid == __uuidof(IAudioSystemEffects) || riid == __uuidof(IAudioSystemEffects2)) {
-        *object = static_cast<IAudioSystemEffects2*>(this);
-    } else {
-        return E_NOINTERFACE;
+    InjectorApo& self = owner_;
+    if (riid == __uuidof(IUnknown)) {
+        *object = static_cast<IUnknown*>(this);  // must be the inner unknown when aggregated
+        AddRef();
+        return S_OK;
     }
-    AddRef();
+    if (riid == __uuidof(IAudioProcessingObject)) {
+        *object = static_cast<IAudioProcessingObject*>(&self);
+    } else if (riid == __uuidof(IAudioProcessingObjectRT)) {
+        *object = static_cast<IAudioProcessingObjectRT*>(&self);
+    } else if (riid == __uuidof(IAudioProcessingObjectConfiguration)) {
+        *object = static_cast<IAudioProcessingObjectConfiguration*>(&self);
+    } else if (riid == __uuidof(IAudioSystemEffects) || riid == __uuidof(IAudioSystemEffects2) ||
+               riid == __uuidof(IAudioSystemEffects3)) {
+        *object = static_cast<IAudioSystemEffects3*>(&self);
+    } else {
+        return E_NOINTERFACE;  // the engine probes many optional interfaces
+    }
+    // Interface pointers AddRef through the controlling unknown.
+    static_cast<IUnknown*>(*object)->AddRef();
     return S_OK;
 }
 
-ULONG InjectorApo::AddRef() noexcept { return refs_.fetch_add(1, std::memory_order_relaxed) + 1; }
+ULONG InjectorApo::NonDelegatingUnknown::AddRef() noexcept {
+    return owner_.refs_.fetch_add(1, std::memory_order_relaxed) + 1;
+}
 
-ULONG InjectorApo::Release() noexcept {
-    const ULONG remaining = refs_.fetch_sub(1, std::memory_order_acq_rel) - 1;
+ULONG InjectorApo::NonDelegatingUnknown::Release() noexcept {
+    const ULONG remaining = owner_.refs_.fetch_sub(1, std::memory_order_acq_rel) - 1;
     if (remaining == 0) {
-        delete this;
+        delete &owner_;
     }
     return remaining;
 }
@@ -184,7 +213,10 @@ HRESULT InjectorApo::Initialize(UINT32 data_size, BYTE* data) noexcept {
     }
     // We need nothing from the init structure except the discovery flag; any
     // other (future) structure size is accepted rather than failing.
-    if (data_size == sizeof(APOInitSystemEffects2)) {
+    if (data_size == sizeof(APOInitSystemEffects3)) {
+        const auto* init = reinterpret_cast<const APOInitSystemEffects3*>(data);
+        discovery_only_ = init->InitializeForDiscoveryOnly != FALSE;
+    } else if (data_size == sizeof(APOInitSystemEffects2)) {
         const auto* init = reinterpret_cast<const APOInitSystemEffects2*>(data);
         discovery_only_ = init->InitializeForDiscoveryOnly != FALSE;
     }
@@ -195,12 +227,30 @@ HRESULT InjectorApo::Initialize(UINT32 data_size, BYTE* data) noexcept {
 
 HRESULT InjectorApo::IsInputFormatSupported(IAudioMediaType* opposite, IAudioMediaType* requested,
                                             IAudioMediaType** supported) noexcept {
-    return NegotiateFormat(opposite, requested, supported);
+    const HRESULT hr = NegotiateFormat(opposite, requested, supported);
+    LogNegotiation(L"input", requested, hr);
+    return hr;
 }
 
 HRESULT InjectorApo::IsOutputFormatSupported(IAudioMediaType* opposite, IAudioMediaType* requested,
                                              IAudioMediaType** supported) noexcept {
-    return NegotiateFormat(opposite, requested, supported);
+    const HRESULT hr = NegotiateFormat(opposite, requested, supported);
+    LogNegotiation(L"output", requested, hr);
+    return hr;
+}
+
+void InjectorApo::LogNegotiation(const wchar_t* side, IAudioMediaType* requested,
+                                 HRESULT hr) noexcept {
+    UNCOMPRESSEDAUDIOFORMAT format{};
+    if (requested == nullptr || FAILED(requested->GetUncompressedAudioFormat(&format))) {
+        log::Info(L"APO: {} format query (undescribable) -> 0x{:08X}", side,
+                  static_cast<unsigned>(hr));
+        return;
+    }
+    log::Info(L"APO: {} format {} Hz / {} ch / {}-bit container, {} valid / float {} -> 0x{:08X}",
+              side, format.fFramesPerSecond, format.dwSamplesPerFrame,
+              format.dwBytesPerSampleContainer * 8, format.dwValidBitsPerSample,
+              IsEqualGUID(format.guidFormatType, kSubtypeIeeeFloat), static_cast<unsigned>(hr));
 }
 
 HRESULT InjectorApo::GetInputChannelCount(UINT32* channels) noexcept {
@@ -235,9 +285,12 @@ HRESULT InjectorApo::LockForProcess(UINT32 input_count, APO_CONNECTION_DESCRIPTO
     if (!DescribeFloatFormat(inputs[0]->pFormat, in) ||
         !DescribeFloatFormat(outputs[0]->pFormat, out) || in.channels != out.channels ||
         in.sample_rate != out.sample_rate) {
+        log::Warn(L"APO: LockForProcess rejected the connection format");
         return APOERR_INVALID_CONNECTION_FORMAT;
     }
     if (outputs[0]->u32MaxFrameCount < inputs[0]->u32MaxFrameCount) {
+        log::Warn(L"APO: LockForProcess rejected max frame counts {} -> {}",
+                  inputs[0]->u32MaxFrameCount, outputs[0]->u32MaxFrameCount);
         return APOERR_INVALID_OUTPUT_MAXFRAMECOUNT;
     }
 
@@ -351,6 +404,25 @@ HRESULT InjectorApo::GetEffectsList(LPGUID* effect_ids, UINT* effect_count,
     *effect_ids = nullptr;
     *effect_count = 0;
     return S_OK;
+}
+
+// ---------------------------------------------------------------------------
+// IAudioSystemEffects3
+// ---------------------------------------------------------------------------
+HRESULT InjectorApo::GetControllableSystemEffectsList(AUDIO_SYSTEMEFFECT** effects,
+                                                      UINT* effect_count, HANDLE /*event*/) noexcept {
+    if (effects == nullptr || effect_count == nullptr) {
+        return E_POINTER;
+    }
+    // Nothing for the Settings app to toggle (the app controls routing).
+    *effects = nullptr;
+    *effect_count = 0;
+    return S_OK;
+}
+
+HRESULT InjectorApo::SetAudioSystemEffectState(GUID /*effect_id*/,
+                                               AUDIO_SYSTEMEFFECT_STATE /*state*/) noexcept {
+    return E_NOTFOUND;  // we published no controllable effects
 }
 
 }  // namespace somike::apo

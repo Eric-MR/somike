@@ -1,5 +1,13 @@
+#include "resource.h"
+
 #define SOMIKE_FILE_DESCRIPTION "Somike - route application audio into your microphone"
 #define SOMIKE_INTERNAL_NAME "somike"
 #define SOMIKE_ORIGINAL_FILENAME "somike.exe"
 #define SOMIKE_FILE_TYPE VFT_APP
 #include "somike/common/version_info.rc.inc"
+
+IDI_APP ICON "somike.ico"
+
+IDR_UI_INDEX_HTML RCDATA "ui/index.html"
+IDR_UI_APP_CSS RCDATA "ui/app.css"
+IDR_UI_APP_JS RCDATA "ui/app.js"

@@ -9,7 +9,8 @@ virtual audio device and without users changing their microphone settings?
 Object (APO)* registered on the physical microphone's endpoint. It comes with
 a set of real limitations (below), the most important being one-time
 administrator rights, code signing for distribution, and that apps opening
-the microphone in RAW/exclusive mode are not reached.
+the microphone in exclusive mode are not reached. (Raw mode is reached
+because the APO is the *endpoint* effect; see the table in section 4.)
 
 ## 1. Where audio can be intercepted
 
@@ -37,7 +38,7 @@ works in practice on Windows 10/11.
 
 | # | Approach | Apps keep their mic setting | Admin | Signing | Main risks | Verdict |
 |---|----------|:---:|:---:|---|---|---|
-| 1 | **Capture SFX APO on the physical endpoint** | yes | once | Authenticode for SAC/WDAC machines | unsupported config route, RAW mode bypass, driver updates reset it | **Chosen** |
+| 1 | **Capture system-effect APO (endpoint effect) on the physical endpoint** | yes | once | Authenticode for SAC/WDAC machines | unsupported config route, exclusive mode bypass, driver updates reset it | **Chosen** |
 | 2 | Virtual audio device (virtual cable / custom driver) | no (must pick the new device, or it becomes default) | install | kernel driver: attestation signing (EV cert + Partner Center) | kernel code, user reconfiguration | Fallback |
 | 3 | Kernel filter driver on the mic stack | yes | install | kernel signing | BSODs, enormous effort | Rejected |
 | 4 | DLL injection / API hooking into Discord, games... | yes | no | - | breaks with app updates, **anti-cheat bans**, per-app work | Rejected |
@@ -49,9 +50,11 @@ works in practice on Windows 10/11.
 API (`AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK`, include or exclude a
 process tree) and writes canonical 48 kHz stereo float audio into a ring
 buffer in a shared memory-mapped file. `somike_apo.dll`, registered as the
-microphone's **stream effect (SFX)**, maps the same file inside
+microphone's **endpoint effect (EFX)**, maps the same file inside
 `audiodg.exe`, converts the audio to the microphone's format (rate, channels,
-clock drift), and mixes it into each capture stream in place. If anything is
+clock drift), and mixes it into the microphone signal in place, before the
+audio engine splits it into the default, communications and raw streams the
+apps receive. If anything is
 missing or stale, it passes the microphone through unchanged. Details:
 [architecture.md](architecture.md), [ipc-protocol.md](ipc-protocol.md).
 
@@ -62,11 +65,12 @@ missing or stale, it passes the microphone through unchanged. Details:
 | `MMDevices` keys are owned by TrustedInstaller | even admins cannot write FxProperties normally | the elevated installer enables `SeRestorePrivilege` and opens keys with `REG_OPTION_BACKUP_RESTORE`: no ownership/ACL changes left behind |
 | Effects load when the audio graph is built | install/uninstall needs an audio-service restart (or reboot) | `--restart-audio`; the UI asks first |
 | Writing FxProperties directly is **not an officially supported** installation route (drivers are expected to declare APOs in their INF) | driver reinstall/update can overwrite the configuration | lossless backup of every touched value; status check in the UI; **Repair** button |
-| Existing driver (OEM) stream effects, e.g. noise suppression or array beamforming | replacing them would degrade the mic | `auto` strategy never displaces them; `composite` chains after them (Win10 1803+ composite keys, interaction with the single key undocumented, so marked experimental); `replace` only on explicit request, restored on uninstall |
-| Legacy LFX/GFX-only devices | adding an SFX makes Windows ignore LFX/GFX | `auto` refuses; explicit strategy required |
-| "Audio enhancements" switched off (`PKEY_AudioEndpoint_Disable_SysFx`) | no APO runs at all | detected; install re-enables it (and backs up the old value) |
-| Windows disables system effects after repeated APO failures | one buggy APO can switch off all enhancements of the device | the APO never fails for tolerable conditions, treats shared memory as untrusted, and passes through on any error |
-| **RAW mode** / exclusive-mode capture | no system effects are applied to such streams | inherent; documented. Most voice apps use shared mode |
+| Existing driver (OEM) endpoint effects, e.g. array beamforming | replacing them would degrade the mic | `auto` strategy never displaces them; `composite` chains after them (Win10 1803+ composite keys, interaction with the single key undocumented, so marked experimental); `replace` only on explicit request, restored on uninstall. OEM stream/mode effects are not touched |
+| Legacy LFX/GFX-only devices | adding a modern effect makes Windows ignore LFX/GFX | `auto` refuses; explicit strategy required |
+| "Audio enhancements" switched off (`PKEY_AudioEndpoint_Disable_SysFx`, stored in `FxProperties`) | no APO runs at all | detected; install re-enables it (and backs up the old value) |
+| Windows disables system effects after APO failures or hangs | one buggy APO can switch off all enhancements of the device; **observed**: Windows set `Disable_SysFx = 1` within seconds when the APO refused aggregation, and when it blocked in `OutputDebugString` | the APO supports aggregation and `IAudioSystemEffects3`, never blocks or fails for tolerable conditions, treats shared memory as untrusted, and passes through on any error |
+| **RAW mode** capture | Windows skips stream (SFX) and mode (MFX) effects for raw streams. **Observed**: Discord's voice engine records in raw mode, so version 0.1.0 (a stream effect) was silent in Discord | Somike registers as the **endpoint effect**, which Microsoft documents as "always applied, even to raw streams"; verified with `somike-selftest --modes` (default, communications, raw, communications+raw all receive the tone). 0.1.0 installations are upgraded by `install` / **Update** |
+| Exclusive-mode capture | no effects at all | inherent; documented. Voice apps use shared mode |
 | App-side processing (noise suppression, AGC) | music may be filtered after injection | user setting in the consuming app |
 | **Code integrity: Smart App Control / WDAC** | unsigned binaries are blocked, including DLLs loaded into `audiodg.exe`. Observed on the development machine, where SAC blocked the freshly built executables | sign release builds (Authenticode via Azure Trusted Signing or an OV/EV certificate). Per Microsoft, an unsigned APO also fails to load when the graph runs protected (DRM) content |
 | Process loopback needs Windows 10 build 20348+ / Windows 11 | older Windows 10 builds cannot capture per app | documented minimum OS |
@@ -76,7 +80,7 @@ missing or stale, it passes the microphone through unchanged. Details:
 ## 5. If the APO route is not available: the best alternative
 
 On machines where effects on the physical microphone are impossible (managed
-devices with policies that forbid it, apps that capture in RAW mode, or no
+devices with policies that forbid it, apps that capture in exclusive mode, or no
 code-signing certificate for SAC machines), the most robust alternative is a
 **virtual microphone that mirrors the physical one plus the injected audio**
 and is set as the **default (communications) capture device**. Apps that use

@@ -1,10 +1,16 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(Somike
-    VERSION 0.1.0
+    VERSION 0.2.0
     DESCRIPTION "Route application audio into a physical microphone on Windows"
     LANGUAGES CXX RC
 )
+
+# Pre-release label ("" for a final release). The full version string is
+# PROJECT_VERSION + suffix; the release workflow refuses a tag that differs
+# from "v<full version>".
+set(SOMIKE_VERSION_SUFFIX "-beta.1")
+set(SOMIKE_VERSION_FULL "${PROJECT_VERSION}${SOMIKE_VERSION_SUFFIX}")
 
 if(NOT WIN32)
     message(FATAL_ERROR "Somike targets Windows only.")
@@ -52,14 +58,15 @@ add_subdirectory(src/core)       # capture, routing, settings (no UI)
 add_subdirectory(src/apo)        # somike_apo.dll (runs inside audiodg.exe)
 add_subdirectory(src/apoctl)     # somike-apoctl.exe (install / uninstall / status)
 add_subdirectory(src/app)        # somike.exe (desktop UI)
+add_subdirectory(tools/selftest) # somike-selftest.exe (hardware end-to-end check)
 
 if(SOMIKE_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
 
-# `cmake --install` produces a portable folder: the three binaries must stay
-# side by side.
-install(TARGETS somike somike_apoctl RUNTIME DESTINATION .)
+# `cmake --install` produces the portable folder that is also the release zip:
+# somike.exe, somike-apoctl.exe and somike_apo.dll must stay side by side.
+install(TARGETS somike somike_apoctl somike_selftest RUNTIME DESTINATION .)
 install(TARGETS somike_apo LIBRARY DESTINATION .)
-install(FILES README.md DESTINATION .)
+install(FILES README.md LICENSE CHANGELOG.md DESTINATION .)

@@ -11,8 +11,23 @@ namespace {
 
 const std::wstring kSomike = protocol::kApoClsidString;
 
-std::vector<std::wstring> DefaultModes() {
-    return {fx::kModeDefault, fx::kModeCommunications};
+// PKEY_EFX_ProcessingModes_Supported_For_Streaming accepts only DEFAULT.
+std::vector<std::wstring> EndpointModes() {
+    return {fx::kModeDefault};
+}
+
+// Removes Somike from one single-CLSID slot and its composite chain.
+void AppendRemoval(const FxSnapshot& s, const wchar_t* slot, const wchar_t* chain_name,
+                   std::vector<RegistryEdit>& edits) {
+    if (auto value = s.String(slot); value && IsSomikeClsid(*value)) {
+        edits.push_back(RegistryEdit::Delete(slot));
+    }
+    auto chain = s.MultiString(chain_name);
+    const auto removed = std::erase_if(chain, [](const std::wstring& c) { return IsSomikeClsid(c); });
+    if (removed != 0) {
+        edits.push_back(chain.empty() ? RegistryEdit::Delete(chain_name)
+                                      : RegistryEdit::SetMultiString(chain_name, chain));
+    }
 }
 
 bool HasModernEffects(const FxSnapshot& s) {
@@ -101,80 +116,98 @@ void ApplyToSnapshot(FxSnapshot& snapshot, const std::vector<RegistryEdit>& edit
     }
 }
 
-InstallPlan PlanInstall(const FxSnapshot& s, Strategy strategy) {
+InstallPlan PlanInstall(const FxSnapshot& current, Strategy strategy) {
     InstallPlan plan;
 
-    if (s.EffectsDisabled()) {
+    if (current.EffectsDisabled()) {
         plan.enable_effects = true;
         plan.notes.emplace_back(
             L"\"Audio enhancements\" are disabled for this microphone; they will be enabled "
             L"because Windows does not run any effect (including Somike) otherwise.");
     }
 
-    if (QueryInstallState(s) != InstallState::NotInstalled) {
+    const InstallState state = QueryInstallState(current);
+    if (state != InstallState::NotInstalled && !NeedsUpgrade(state)) {
         plan.status = PlanStatus::AlreadyInstalled;
         plan.notes.emplace_back(L"Somike is already installed on this microphone.");
         return plan;
     }
 
-    const bool has_stream = s.Has(fx::kStreamEffect);
-    const bool has_composite = s.Has(fx::kCompositeStreamEffect);
+    // An upgrade first takes Somike out of the 0.1.0 stream-effect slot; the
+    // endpoint effect is then planned against the endpoint as it is without it.
+    const bool upgrade = NeedsUpgrade(state);
+    FxSnapshot s = current;
+    if (upgrade) {
+        AppendRemoval(current, fx::kStreamEffect, fx::kCompositeStreamEffect, plan.fx_edits);
+        ApplyToSnapshot(s, plan.fx_edits);
+        plan.notes.emplace_back(
+            L"Somike is installed as a stream effect, which apps recording in raw mode (such as "
+            L"Discord) bypass. Moving it to the endpoint effect, which every stream passes.");
+        if (QueryInstallState(s) != InstallState::NotInstalled) {
+            plan.status = PlanStatus::Upgrade;  // already an endpoint effect as well
+            return plan;
+        }
+    }
+    auto refuse = [&plan](std::wstring note) {
+        plan.status = PlanStatus::Refused;
+        plan.fx_edits.clear();
+        plan.notes.push_back(std::move(note));
+        return plan;
+    };
+
+    const bool has_endpoint = s.Has(fx::kEndpointEffect);
+    const bool has_composite = s.Has(fx::kCompositeEndpointEffect);
     const bool legacy_only = HasLegacyEffects(s) && !HasModernEffects(s);
-    const bool has_modes = s.Has(fx::kStreamProcessingModes);
+    const bool has_modes = s.Has(fx::kEndpointProcessingModes);
 
     switch (strategy) {
         case Strategy::Auto: {
             if (has_composite) {
-                auto chain = s.MultiString(fx::kCompositeStreamEffect);
+                auto chain = s.MultiString(fx::kCompositeEndpointEffect);
                 chain.push_back(kSomike);
                 plan.fx_edits.push_back(
-                    RegistryEdit::SetMultiString(fx::kCompositeStreamEffect, std::move(chain)));
+                    RegistryEdit::SetMultiString(fx::kCompositeEndpointEffect, std::move(chain)));
                 plan.notes.emplace_back(
-                    L"Appending Somike to the existing composite stream-effect chain.");
+                    L"Appending Somike to the existing composite endpoint-effect chain.");
                 break;
             }
-            if (has_stream) {
-                plan.status = PlanStatus::Refused;
-                plan.notes.push_back(
-                    L"This microphone already has a driver stream effect (" +
-                    Describe(s, fx::kStreamEffect) +
-                    L"). Choose --strategy composite to keep it (experimental) or "
-                    L"--strategy replace to disable it while Somike is installed.");
-                return plan;
+            if (has_endpoint) {
+                return refuse(L"This microphone already has a driver endpoint effect (" +
+                              Describe(s, fx::kEndpointEffect) +
+                              L"). Choose --strategy composite to keep it (experimental) or "
+                              L"--strategy replace to disable it while Somike is installed.");
             }
             if (legacy_only) {
-                plan.status = PlanStatus::Refused;
-                plan.notes.emplace_back(
-                    L"This microphone uses legacy (LFX/GFX) driver effects. Adding a stream "
+                return refuse(
+                    L"This microphone uses legacy (LFX/GFX) driver effects. Adding an endpoint "
                     L"effect makes Windows ignore them. Use --strategy replace to accept that.");
-                return plan;
             }
-            plan.fx_edits.push_back(RegistryEdit::SetString(fx::kStreamEffect, kSomike));
+            plan.fx_edits.push_back(RegistryEdit::SetString(fx::kEndpointEffect, kSomike));
             if (!has_modes) {
                 plan.fx_edits.push_back(
-                    RegistryEdit::SetMultiString(fx::kStreamProcessingModes, DefaultModes()));
+                    RegistryEdit::SetMultiString(fx::kEndpointProcessingModes, EndpointModes()));
             }
-            plan.notes.emplace_back(L"Installing Somike as the stream effect (no existing one).");
+            plan.notes.emplace_back(L"Installing Somike as the endpoint effect (no existing one).");
             break;
         }
 
         case Strategy::Composite: {
             std::vector<std::wstring> chain;
             if (has_composite) {
-                chain = s.MultiString(fx::kCompositeStreamEffect);
-            } else if (auto existing = s.String(fx::kStreamEffect)) {
+                chain = s.MultiString(fx::kCompositeEndpointEffect);
+            } else if (auto existing = s.String(fx::kEndpointEffect)) {
                 chain.push_back(*existing);
             }
             chain.push_back(kSomike);
             plan.fx_edits.push_back(
-                RegistryEdit::SetMultiString(fx::kCompositeStreamEffect, std::move(chain)));
-            if (!has_stream && !has_composite && !has_modes) {
+                RegistryEdit::SetMultiString(fx::kCompositeEndpointEffect, std::move(chain)));
+            if (!has_endpoint && !has_composite && !has_modes) {
                 plan.fx_edits.push_back(
-                    RegistryEdit::SetMultiString(fx::kStreamProcessingModes, DefaultModes()));
+                    RegistryEdit::SetMultiString(fx::kEndpointProcessingModes, EndpointModes()));
             }
             plan.notes.emplace_back(
                 L"Experimental: Microsoft does not document how the single and composite "
-                L"stream-effect keys interact. Verify with 'somike-apoctl status' that the "
+                L"endpoint-effect keys interact. Verify with 'somike-apoctl status' that the "
                 L"injector reports activity.");
             if (legacy_only) {
                 plan.notes.emplace_back(
@@ -184,17 +217,17 @@ InstallPlan PlanInstall(const FxSnapshot& s, Strategy strategy) {
         }
 
         case Strategy::Replace: {
-            if (has_stream) {
-                plan.notes.push_back(L"Replacing driver stream effect " +
-                                     Describe(s, fx::kStreamEffect) +
+            if (has_endpoint) {
+                plan.notes.push_back(L"Replacing driver endpoint effect " +
+                                     Describe(s, fx::kEndpointEffect) +
                                      L" (backed up; restored on uninstall).");
             }
-            plan.fx_edits.push_back(RegistryEdit::SetString(fx::kStreamEffect, kSomike));
+            plan.fx_edits.push_back(RegistryEdit::SetString(fx::kEndpointEffect, kSomike));
             if (has_composite) {
-                plan.fx_edits.push_back(RegistryEdit::Delete(fx::kCompositeStreamEffect));
+                plan.fx_edits.push_back(RegistryEdit::Delete(fx::kCompositeEndpointEffect));
             }
             plan.fx_edits.push_back(
-                RegistryEdit::SetMultiString(fx::kStreamProcessingModes, DefaultModes()));
+                RegistryEdit::SetMultiString(fx::kEndpointProcessingModes, EndpointModes()));
             if (legacy_only) {
                 plan.notes.emplace_back(
                     L"Legacy LFX/GFX effects will be ignored while Somike is installed.");
@@ -203,22 +236,14 @@ InstallPlan PlanInstall(const FxSnapshot& s, Strategy strategy) {
         }
     }
 
-    plan.status = PlanStatus::Ready;
+    plan.status = upgrade ? PlanStatus::Upgrade : PlanStatus::Ready;
     return plan;
 }
 
 std::vector<RegistryEdit> PlanRemoval(const FxSnapshot& s) {
     std::vector<RegistryEdit> edits;
-    if (auto stream = s.String(fx::kStreamEffect); stream && IsSomikeClsid(*stream)) {
-        edits.push_back(RegistryEdit::Delete(fx::kStreamEffect));
-    }
-    auto chain = s.MultiString(fx::kCompositeStreamEffect);
-    const auto removed = std::erase_if(chain, [](const std::wstring& c) { return IsSomikeClsid(c); });
-    if (removed != 0) {
-        edits.push_back(chain.empty()
-                            ? RegistryEdit::Delete(fx::kCompositeStreamEffect)
-                            : RegistryEdit::SetMultiString(fx::kCompositeStreamEffect, chain));
-    }
+    AppendRemoval(s, fx::kStreamEffect, fx::kCompositeStreamEffect, edits);
+    AppendRemoval(s, fx::kEndpointEffect, fx::kCompositeEndpointEffect, edits);
     return edits;
 }
 

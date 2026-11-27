@@ -44,4 +44,8 @@ std::wstring RingFile() {
     return ProgramDataRoot() + L"\\" + protocol::kRingFileRelativePath;
 }
 
+std::wstring ApoLogFile() {
+    return ProgramDataRoot() + L"\\" + protocol::kApoLogFileRelativePath;
+}
+
 }  // namespace somike::paths

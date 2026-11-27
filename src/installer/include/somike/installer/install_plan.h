@@ -12,14 +12,15 @@
 
 namespace somike::installer {
 
+// Somike goes into the endpoint-effect (EFX) slot; see InstallState.
 enum class Strategy {
     // Install only where it cannot disable existing effects; refuse otherwise.
     Auto,
-    // Keep existing stream effects and append Somike to the composite list
-    // (PKEY_CompositeFX_StreamEffectClsid, Windows 10 1803+). Experimental.
+    // Keep an existing driver endpoint effect and append Somike to the
+    // composite list (PKEY_CompositeFX_EndpointEffectClsid). Experimental.
     Composite,
-    // Put Somike in the stream-effect slot, replacing (and backing up) any
-    // existing driver stream effect.
+    // Put Somike in the endpoint-effect slot, replacing (and backing up) any
+    // existing driver endpoint effect.
     Replace,
 };
 
@@ -46,7 +47,12 @@ struct RegistryEdit {
 // Applies edits to an in-memory snapshot (used to verify plans in tests).
 void ApplyToSnapshot(FxSnapshot& snapshot, const std::vector<RegistryEdit>& edits);
 
-enum class PlanStatus { Ready, AlreadyInstalled, Refused };
+enum class PlanStatus {
+    Ready,             // fresh installation
+    Upgrade,           // installed in the 0.1.0 stream-effect slot; the plan moves it
+    AlreadyInstalled,  // nothing to change in FxProperties (maybe re-enable effects)
+    Refused,
+};
 
 struct InstallPlan {
     PlanStatus status = PlanStatus::Refused;
@@ -57,7 +63,8 @@ struct InstallPlan {
 
 [[nodiscard]] InstallPlan PlanInstall(const FxSnapshot& snapshot, Strategy strategy);
 
-// Edits that remove Somike from an endpoint without a backup (fallback).
+// Edits that remove Somike from every effect slot of an endpoint without a
+// backup (fallback).
 [[nodiscard]] std::vector<RegistryEdit> PlanRemoval(const FxSnapshot& snapshot);
 
 }  // namespace somike::installer

@@ -13,4 +13,7 @@ namespace somike::paths {
 // %ProgramData%\Somike\ring-v<version>.bin
 [[nodiscard]] std::wstring RingFile();
 
+// %ProgramData%\Somike\apo.log
+[[nodiscard]] std::wstring ApoLogFile();
+
 }  // namespace somike::paths

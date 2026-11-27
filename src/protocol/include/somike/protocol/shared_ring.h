@@ -25,6 +25,8 @@ inline constexpr std::uint32_t kVersion = 1;
 // APO and a new app never interpret each other's layout.
 inline constexpr wchar_t kRingFileRelativePath[] = L"Somike\\ring-v1.bin";
 inline constexpr wchar_t kDataDirectoryName[] = L"Somike";
+// Diagnostics log of the APO; created (writable for the audio service) by the installer.
+inline constexpr wchar_t kApoLogFileRelativePath[] = L"Somike\\apo.log";
 
 // ---------------------------------------------------------------------------
 // Canonical stream format carried by the ring

@@ -62,12 +62,10 @@ FxSnapshot ReadFxSnapshot(const EndpointId& id) {
                 snapshot.fx_values.emplace(name, std::move(*value));
             }
         }
-    }
-
-    reg::Key properties;
-    if (SUCCEEDED(reg::Key::Open(HKEY_LOCAL_MACHINE, PropertiesKeyPath(id),
-                                 KEY_READ | KEY_WOW64_64KEY, properties))) {
-        snapshot.disable_sysfx = properties.ReadRaw(fx::kDisableSysFx);
+        // The "Audio enhancements" switch lives in FxProperties; this is also
+        // where the audio service sets it when it auto-disables a misbehaving
+        // effect.
+        snapshot.disable_sysfx = fx.ReadRaw(fx::kDisableSysFx);
     }
     return snapshot;
 }
@@ -76,14 +74,27 @@ bool IsSomikeClsid(std::wstring_view clsid) noexcept {
     return text::EqualsIgnoreCase(text::Trim(clsid), protocol::kApoClsidString);
 }
 
+namespace {
+
+bool SlotHasSomike(const FxSnapshot& snapshot, const wchar_t* name) {
+    const auto value = snapshot.String(name);
+    return value && IsSomikeClsid(*value);
+}
+
+bool ChainHasSomike(const FxSnapshot& snapshot, const wchar_t* name) {
+    const auto chain = snapshot.MultiString(name);
+    return std::any_of(chain.begin(), chain.end(),
+                       [](const std::wstring& clsid) { return IsSomikeClsid(clsid); });
+}
+
+}  // namespace
+
 InstallState QueryInstallState(const FxSnapshot& snapshot) {
-    if (const auto stream = snapshot.String(fx::kStreamEffect); stream && IsSomikeClsid(*stream)) {
-        return InstallState::InstalledStreamEffect;
-    }
-    const auto composite = snapshot.MultiString(fx::kCompositeStreamEffect);
-    if (std::any_of(composite.begin(), composite.end(),
-                    [](const std::wstring& clsid) { return IsSomikeClsid(clsid); })) {
-        return InstallState::InstalledComposite;
+    if (SlotHasSomike(snapshot, fx::kStreamEffect)) return InstallState::InstalledStreamEffect;
+    if (ChainHasSomike(snapshot, fx::kCompositeStreamEffect)) return InstallState::InstalledComposite;
+    if (SlotHasSomike(snapshot, fx::kEndpointEffect)) return InstallState::InstalledEndpointEffect;
+    if (ChainHasSomike(snapshot, fx::kCompositeEndpointEffect)) {
+        return InstallState::InstalledCompositeEndpoint;
     }
     return InstallState::NotInstalled;
 }
@@ -92,12 +103,20 @@ const wchar_t* ToString(InstallState state) noexcept {
     switch (state) {
         case InstallState::NotInstalled:
             return L"not installed";
+        case InstallState::InstalledEndpointEffect:
+            return L"installed (endpoint effect)";
+        case InstallState::InstalledCompositeEndpoint:
+            return L"installed (composite endpoint effect)";
         case InstallState::InstalledStreamEffect:
-            return L"installed (stream effect)";
+            return L"installed as stream effect (outdated: raw-mode apps such as Discord bypass it; run install to upgrade)";
         case InstallState::InstalledComposite:
-            return L"installed (composite stream effect)";
+            return L"installed as composite stream effect (outdated: run install to upgrade)";
     }
     return L"unknown";
+}
+
+bool NeedsUpgrade(InstallState state) noexcept {
+    return state == InstallState::InstalledStreamEffect || state == InstallState::InstalledComposite;
 }
 
 }  // namespace somike::installer

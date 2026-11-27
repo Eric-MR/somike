@@ -17,6 +17,10 @@ struct AudioEndpoint {
 // initialised. Returns an empty list on failure.
 [[nodiscard]] std::vector<AudioEndpoint> EnumerateCaptureEndpoints();
 
+// Whether the endpoint is muted in Windows (Sound settings / headset button
+// mapped to the endpoint mute). nullopt if it cannot be queried.
+[[nodiscard]] std::optional<bool> IsCaptureEndpointMuted(const std::wstring& endpoint_id);
+
 // Id of the default capture endpoint for the console role.
 [[nodiscard]] std::optional<std::wstring> DefaultCaptureEndpointId();
 

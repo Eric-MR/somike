@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <atomic>
 #include <cstdio>
 #include <iterator>
 #include <mutex>
@@ -15,6 +16,7 @@ namespace {
 
 std::mutex g_file_mutex;
 win32::UniqueFileHandle g_file;
+std::atomic<bool> g_debug_output{true};
 
 const wchar_t* LevelName(Level level) noexcept {
     switch (level) {
@@ -32,11 +34,14 @@ const wchar_t* LevelName(Level level) noexcept {
 
 }  // namespace
 
-void SetFile(const std::wstring& path) {
+bool SetFile(const std::wstring& path) {
     std::scoped_lock lock(g_file_mutex);
     g_file.reset(::CreateFileW(path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
                                nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    return static_cast<bool>(g_file);
 }
+
+void SetDebugOutput(bool enabled) noexcept { g_debug_output.store(enabled, std::memory_order_relaxed); }
 
 void Write(Level level, std::wstring_view message) noexcept {
     try {
@@ -52,7 +57,9 @@ void Write(Level level, std::wstring_view message) noexcept {
         line.append(stamp).append(L" [").append(LevelName(level)).append(L"] ");
         line.append(message).append(L"\r\n");
 
-        ::OutputDebugStringW((L"[Somike] " + line).c_str());
+        if (g_debug_output.load(std::memory_order_relaxed)) {
+            ::OutputDebugStringW((L"[Somike] " + line).c_str());
+        }
 
         std::scoped_lock lock(g_file_mutex);
         if (g_file) {

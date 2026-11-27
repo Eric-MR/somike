@@ -46,6 +46,10 @@ public:
     void SetGains(float inject_gain, bool mute_microphone) noexcept;
 
     [[nodiscard]] RouterStatus status() const noexcept;
+
+    // Highest absolute sample captured since the previous call (0..1+), for a
+    // level meter. Resets on read.
+    [[nodiscard]] float TakePeak() noexcept { return peak_.exchange(0.0f, std::memory_order_relaxed); }
     [[nodiscard]] bool routing() const noexcept { return state_.load() == RouterState::Routing; }
 
     // Diagnostics published by the APO; available whenever the ring exists.
@@ -66,6 +70,7 @@ private:
     std::atomic<RouterState> state_{RouterState::Stopped};
     std::atomic<HRESULT> error_{S_OK};
     std::atomic<std::uint64_t> frames_written_{0};
+    std::atomic<float> peak_{0.0f};
 };
 
 }  // namespace somike::core

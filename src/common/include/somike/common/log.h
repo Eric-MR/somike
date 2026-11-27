@@ -11,7 +11,13 @@ enum class Level { Debug, Info, Warning, Error };
 
 // Every message goes to OutputDebugString (visible in DebugView / a debugger).
 // Optionally also appended to a UTF-8 file: "2026-11-26 14:03:12.345 [INFO] text".
-void SetFile(const std::wstring& path);
+// Returns false if the file could not be opened (logging stays debug-output only).
+bool SetFile(const std::wstring& path);
+
+// Turns OutputDebugString on/off (default on). The APO turns it off: inside
+// audiodg.exe an attached debug-output listener can block each call for up to
+// 10 s, which the audio service treats as a hung effect and disables it.
+void SetDebugOutput(bool enabled) noexcept;
 
 // Never throws. Not real-time safe (allocates, may block on file I/O).
 void Write(Level level, std::wstring_view message) noexcept;

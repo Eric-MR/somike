@@ -12,6 +12,7 @@ namespace somike::core {
 struct AudioSource {
     DWORD process_id = 0;
     std::wstring executable;    // "Spotify.exe"
+    std::wstring image_path;    // full path of the executable
     std::wstring display_name;  // session display name; often empty
     bool active = false;        // currently playing audio
 };

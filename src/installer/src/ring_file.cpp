@@ -169,11 +169,26 @@ HRESULT CreateRingFile(Report& report) {
         return E_UNEXPECTED;
     }
     report.push_back(L"Shared ring ready: " + file);
+
+    // APO diagnostics log, same permissions; truncated on every install. The
+    // APO cannot create files here itself (the directory is read-only for it).
+    const std::wstring log_file = paths::ApoLogFile();
+    win32::UniqueFileHandle log(::CreateFileW(log_file.c_str(), GENERIC_WRITE,
+                                              FILE_SHARE_READ | FILE_SHARE_WRITE, &file_sa,
+                                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!log) {
+        report.push_back(L"Warning: could not create " + log_file + L": " +
+                         win32::FormatHResult(win32::LastErrorAsHResult()));
+    } else {
+        log.reset();
+        (void)ApplyDacl(log_file, file_sd);  // CREATE_ALWAYS keeps an existing file's DACL
+    }
     return S_OK;
 }
 
 HRESULT DeleteRingFile(Report& report) {
     const std::wstring file = paths::RingFile();
+    ::DeleteFileW(paths::ApoLogFile().c_str());  // best effort
     if (::DeleteFileW(file.c_str()) || ::GetLastError() == ERROR_FILE_NOT_FOUND) {
         ::RemoveDirectoryW(paths::DataDirectory().c_str());  // only succeeds if empty
         return S_OK;

@@ -7,6 +7,7 @@ add_library(somike_core STATIC
     src/elevated_tool.cpp
     src/injector_status.cpp
     src/loopback_capture.cpp
+    src/process_tree.cpp
     src/router.cpp
     src/settings.cpp
 )
@@ -20,6 +21,7 @@ target_link_libraries(somike_core
         somike::installer
     PRIVATE
         avrt
+        version
         mmdevapi
         ole32
         propsys

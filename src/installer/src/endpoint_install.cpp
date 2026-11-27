@@ -141,15 +141,17 @@ HRESULT ApplyInstallPlan(const EndpointId& id, const FxSnapshot& before, const I
     }
     if (plan.enable_effects) {
         entries.push_back(
-            {kKindProperties, fx::kDisableSysFx, before.disable_sysfx, reg::MakeDword(0)});
+            {kKindFx, fx::kDisableSysFx, before.disable_sysfx, reg::MakeDword(0)});
     }
     if (entries.empty()) {
         return S_OK;
     }
 
-    // Re-running on an installed endpoint (e.g. only to re-enable effects):
-    // keep the original values from the first installation.
-    if (plan.status == PlanStatus::AlreadyInstalled) {
+    // Re-running on an installed endpoint (to re-enable effects, or to move a
+    // 0.1.0 stream-effect installation to the endpoint effect): keep the
+    // original values from the first installation, so uninstall restores the
+    // state from before Somike.
+    if (plan.status == PlanStatus::AlreadyInstalled || plan.status == PlanStatus::Upgrade) {
         if (auto existing = LoadBackup(id)) {
             for (BackupEntry& entry : entries) {
                 const auto it = std::find_if(existing->begin(), existing->end(), [&](const auto& e) {
@@ -177,11 +179,11 @@ HRESULT ApplyInstallPlan(const EndpointId& id, const FxSnapshot& before, const I
         return hr;
     }
     if (plan.enable_effects) {
-        reg::Key properties;
+        reg::Key fx_key;
         HRESULT hr =
-            reg::Key::CreateForRestore(HKEY_LOCAL_MACHINE, PropertiesKeyPath(id), properties);
+            reg::Key::CreateForRestore(HKEY_LOCAL_MACHINE, FxPropertiesKeyPath(id), fx_key);
         if (SUCCEEDED(hr)) {
-            hr = properties.WriteDword(fx::kDisableSysFx, 0);
+            hr = fx_key.WriteDword(fx::kDisableSysFx, 0);
         }
         if (FAILED(hr)) {
             report.push_back(L"Could not enable audio enhancements: " + win32::FormatHResult(hr));

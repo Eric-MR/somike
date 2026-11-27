@@ -13,7 +13,10 @@ set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)  # we link the static CRT ev
 FetchContent_MakeAvailable(googletest)
 
 add_executable(somike_tests
+    apo/apo_com_test.cpp
+    app/app_state_test.cpp
     common/registry_codec_test.cpp
+    core/process_tree_test.cpp
     core/settings_test.cpp
     dsp/injector_test.cpp
     dsp/linear_resampler_test.cpp
@@ -29,9 +32,12 @@ target_link_libraries(somike_tests PRIVATE
     somike::core
     somike::dsp
     somike::installer
+    somike_app_core
     GTest::gtest_main
 )
 somike_configure_target(somike_tests)
+# The APO COM tests load somike_apo.dll from the same output directory.
+add_dependencies(somike_tests somike_apo)
 
 # PRE_TEST: enumerate tests when ctest runs, not as a post-build step, so the
 # build itself never has to execute a freshly built (unsigned) binary.

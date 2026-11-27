@@ -267,6 +267,8 @@ int CommandStatus(const Options& options, Output& out) {
     out.Line(L"Endpoint id:         " + id->full);
     out.Line(std::format(L"Somike:              {}", inst::ToString(inst::QueryInstallState(snapshot))));
     out.Line(std::format(L"Audio enhancements:  {}", snapshot.EffectsDisabled() ? L"DISABLED" : L"enabled"));
+    out.Line(L"Endpoint effect:     " + snapshot.String(inst::fx::kEndpointEffect).value_or(L"(none)"));
+    out.Line(L"Composite EFX chain: " + Join(snapshot.MultiString(inst::fx::kCompositeEndpointEffect)));
     out.Line(L"Stream effect:       " + snapshot.String(inst::fx::kStreamEffect).value_or(L"(none)"));
     out.Line(L"Composite SFX chain: " + Join(snapshot.MultiString(inst::fx::kCompositeStreamEffect)));
     out.Line(std::format(L"Backup present:      {}", inst::HasBackup(*id) ? L"yes" : L"no"));
@@ -325,7 +327,7 @@ int CommandInstall(const Options& options, Output& out) {
             out.Line(L"  FxProperties: " + DescribeEdit(edit));
         }
         if (plan.enable_effects) {
-            out.Line(L"  Properties:   set " + std::wstring(inst::fx::kDisableSysFx) + L" = 0");
+            out.Line(L"  FxProperties: set    " + std::wstring(inst::fx::kDisableSysFx) + L" = 0");
         }
         return kExitOk;
     }
@@ -352,9 +354,17 @@ int CommandInstall(const Options& options, Output& out) {
         return kExitFailure;
     }
 
-    out.Line(plan.status == inst::PlanStatus::AlreadyInstalled
-                 ? L"Somike was already installed; files and registration were refreshed."
-                 : L"Somike injector installed.");
+    switch (plan.status) {
+        case inst::PlanStatus::AlreadyInstalled:
+            out.Line(L"Somike was already installed; files and registration were refreshed.");
+            break;
+        case inst::PlanStatus::Upgrade:
+            out.Line(L"Somike upgraded: it now runs as the endpoint effect, so every app hears it.");
+            break;
+        default:
+            out.Line(L"Somike injector installed.");
+            break;
+    }
     FinishWithRestart(options.restart_audio, out);
     return kExitOk;
 }

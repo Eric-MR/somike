@@ -98,6 +98,16 @@ std::optional<dsp::ConsumerSnapshot> Router::ConsumerStatus() {
 void Router::OnAudio(const float* frames, std::size_t frame_count) noexcept {
     writer_.Write(frames, frame_count, ::GetTickCount64());
     frames_written_.fetch_add(frame_count, std::memory_order_relaxed);
+
+    float block_peak = 0.0f;
+    for (std::size_t i = 0; i < frame_count * proto::kChannels; ++i) {
+        const float magnitude = frames[i] < 0.0f ? -frames[i] : frames[i];
+        block_peak = magnitude > block_peak ? magnitude : block_peak;  // NaN never wins
+    }
+    float previous = peak_.load(std::memory_order_relaxed);
+    while (block_peak > previous &&
+           !peak_.compare_exchange_weak(previous, block_peak, std::memory_order_relaxed)) {
+    }
 }
 
 void Router::OnTick() noexcept { writer_.Heartbeat(::GetTickCount64()); }

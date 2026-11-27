@@ -1,4 +1,5 @@
-// The Somike capture stream effect (SFX) APO.
+// The Somike capture system-effect APO, installed as the microphone's
+// endpoint effect (EFX) so that raw-mode streams receive it too.
 //
 // Loaded by audiodg.exe into every capture stream of the microphone endpoint
 // it is registered on. It is a thin COM shell around dsp::Injector:
@@ -14,6 +15,7 @@
 
 #include <windows.h>
 #include <audioenginebaseapo.h>
+#include <audioengineextensionapo.h>
 #include <audiomediatype.h>
 
 #include <atomic>
@@ -26,14 +28,22 @@ namespace somike::apo {
 class InjectorApo final : public IAudioProcessingObject,
                           public IAudioProcessingObjectRT,
                           public IAudioProcessingObjectConfiguration,
-                          public IAudioSystemEffects2 {
+                          // Windows 11 probes for IAudioSystemEffects3 and drops
+                          // effects without it (observed on build 26200).
+                          public IAudioSystemEffects3 {
 public:
-    InjectorApo() noexcept;
+    // The audio engine creates APOs *aggregated* (outer != nullptr, asking for
+    // IID_IUnknown); `outer` may also be nullptr for standalone use.
+    explicit InjectorApo(IUnknown* outer) noexcept;
 
     InjectorApo(const InjectorApo&) = delete;
     InjectorApo& operator=(const InjectorApo&) = delete;
 
-    // IUnknown
+    // The non-delegating IUnknown that owns this object's lifetime; this is
+    // what the class factory hands out.
+    [[nodiscard]] IUnknown* inner() noexcept { return &inner_; }
+
+    // IUnknown of all exposed interfaces: delegates to the controlling unknown.
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** object) noexcept override;
     ULONG STDMETHODCALLTYPE AddRef() noexcept override;
     ULONG STDMETHODCALLTYPE Release() noexcept override;
@@ -68,11 +78,33 @@ public:
     HRESULT STDMETHODCALLTYPE GetEffectsList(LPGUID* effect_ids, UINT* effect_count,
                                              HANDLE event) noexcept override;
 
+    // IAudioSystemEffects3
+    HRESULT STDMETHODCALLTYPE GetControllableSystemEffectsList(AUDIO_SYSTEMEFFECT** effects,
+                                                               UINT* effect_count,
+                                                               HANDLE event) noexcept override;
+    HRESULT STDMETHODCALLTYPE SetAudioSystemEffectState(GUID effect_id,
+                                                        AUDIO_SYSTEMEFFECT_STATE state) noexcept override;
+
 private:
+    // COM aggregation: QueryInterface/AddRef/Release of this object proper.
+    class NonDelegatingUnknown final : public IUnknown {
+    public:
+        explicit NonDelegatingUnknown(InjectorApo& owner) noexcept : owner_(owner) {}
+        HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** object) noexcept override;
+        ULONG STDMETHODCALLTYPE AddRef() noexcept override;
+        ULONG STDMETHODCALLTYPE Release() noexcept override;
+
+    private:
+        InjectorApo& owner_;
+    };
+
     ~InjectorApo();
 
     void AttachRing() noexcept;
+    static void LogNegotiation(const wchar_t* side, IAudioMediaType* requested, HRESULT hr) noexcept;
 
+    NonDelegatingUnknown inner_{*this};
+    IUnknown* outer_;  // controlling unknown: the aggregator or &inner_; not AddRef'd
     std::atomic<ULONG> refs_{1};
 
     bool initialized_ = false;

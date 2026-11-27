@@ -16,8 +16,8 @@
                       %ProgramData%\Somike\ring-v1.bin  (memory-mapped)
                                                     ^
 +------------------- audiodg.exe (Windows Audio) ---|------------------+
-| per capture stream of the microphone:             |                  |
-|   driver -> EFX -> MFX -> SFX: somike_apo.dll     |                  |
+| once per microphone, before the split into modes: |                  |
+|   driver -> EFX (endpoint fx): somike_apo.dll     |                  |
 |                              InjectorApo (COM)    |                  |
 |                                -> dsp::Injector   |                  |
 |                                     |- dsp::RingReader  -------------+
@@ -41,7 +41,8 @@ somike-apoctl.exe (elevated via UAC, one-time):
 | `somike::core` | Device + session enumeration, process-loopback capture, `Router`, settings, injector status, elevated-tool launcher | common, dsp, installer |
 | `somike_apo.dll` | COM APO shell around `dsp::Injector` | dsp, common |
 | `somike-apoctl.exe` | CLI: list/status/install/uninstall | core, installer |
-| `somike.exe` | Win32 UI: `MainWindow` (view) + `AppController` (logic) | core |
+| `somike_app_core` | `AppController` (plug-and-play logic: app grouping by process tree, live state machine with auto re-attach), `app_state` (the UI JSON contract, unit-tested), icon cache | core |
+| `somike.exe` | `WebWindow`: Win32 window hosting WebView2; serves the embedded HTML UI (`src/app/ui`) from `https://app.somike/` with a strict CSP, bridges JSON messages | app_core, WebView2 loader (static) |
 
 Rules of thumb: logic goes into the lowest layer that can hold it, and pure
 logic (planning, DSP, protocol, settings codec) is separated from I/O so it
@@ -54,12 +55,16 @@ can be tested without hardware or administrator rights.
   Buffers are allocated in `LockForProcess`, and the file is mapped there too.
 - **Capture thread** (`LoopbackCapture`): event-driven WASAPI loop on an MMCSS
   "Audio" thread; writes to the ring and heartbeats every <=100 ms.
-- **UI thread**: owns `AppController`; `Router` start/stop/gain calls are
+- **UI thread** (STA, required by WebView2): owns `AppController` and ticks it
+  every 250 ms (sources every 1.5 s, injector status every 1 s); pushes the UI
+  state as JSON only when it changed. `Router` start/stop/gain calls are
   serialised by a mutex. The elevated installer runs on a worker thread and
   reports back with a window message.
 - **Cross-process**: one producer, any number of consumers. Each APO instance
-  (one per capture stream) keeps its own read position, so no consumer ever
-  writes control data. See [ipc-protocol.md](ipc-protocol.md).
+  (one per microphone: as the endpoint effect it runs before Windows splits
+  the signal into the default/communications/raw streams) keeps its own read
+  position, so no consumer ever writes control data. See
+  [ipc-protocol.md](ipc-protocol.md).
 
 ## Failure model: "never break the microphone"
 
