@@ -136,7 +136,8 @@ h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-s
 .setup {
   flex: 1; overflow-y: auto;
   display: flex; flex-direction: column; align-items: stretch;
-  padding: 10px 26px 22px; gap: 14px;
+  /* Content column of at most 520px, centred in wide (maximized) windows. */
+  padding: 10px max(26px, calc((100% - 520px) / 2)) 22px; gap: 14px;
 }
 .setup h1 { margin: 4px 0 0; font-size: 20px; line-height: 1.25; font-weight: 650; text-align: center; }
 .lead { margin: 0; color: var(--muted); text-align: center; font-size: 13.5px; }
@@ -183,8 +184,11 @@ h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-s
 .main {
   flex: 1; overflow-y: auto;
   display: flex; flex-direction: column; gap: 12px;
-  padding: 8px 16px 12px;
+  /* Content column of at most 600px, centred in wide (maximized) windows;
+     the padding keeps the scrollbar at the window edge. */
+  padding: 8px max(16px, calc((100% - 600px) / 2)) 12px;
 }
+.main, .setup, .sources { scrollbar-width: thin; scrollbar-color: var(--panel-3) transparent; }
 
 .banner {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -193,8 +197,11 @@ h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-s
   color: #fcd34d; font-size: 12.5px;
 }
 
+/* At most two and a half rows of tiles; more apps scroll inside the card, so
+   "Go live" stays in view. The padding keeps focus rings from being clipped. */
 .sources {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px;
+  max-height: 268px; overflow-y: auto; padding: 3px; margin: -3px;
 }
 .tile {
   position: relative;
@@ -271,7 +278,12 @@ h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-s
   box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.55);
   animation: pulse 2s var(--ease) infinite;
 }
-.live-btn[data-waiting="true"] { background: radial-gradient(circle at 50% 35%, #3b2a14, #1c160f 75%); color: #fcd34d; }
+.live-btn[data-phase="waiting"] { background: radial-gradient(circle at 50% 35%, #3b2a14, #1c160f 75%); color: #fcd34d; }
+.live-btn[data-phase="error"] {
+  background: radial-gradient(circle at 50% 35%, #3f1a1d, #1d1012 75%); color: #fca5a5;
+  box-shadow: 0 0 0 7px rgba(239, 68, 68, 0.12), 0 16px 50px rgba(239, 68, 68, 0.25);
+}
+.live-btn[data-phase="waiting"] .live-glow, .live-btn[data-phase="error"] .live-glow { animation: none; opacity: 0; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.5); } 100% { box-shadow: 0 0 0 26px rgba(236, 72, 153, 0); } }
 
 .live-sub { margin: 0; color: var(--muted); font-size: 12.5px; text-align: center; min-height: 18px; padding: 0 12px; }
@@ -280,7 +292,8 @@ h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-s
 .meter-fill { height: 100%; width: 0%; background: var(--live); border-radius: 2px; transition: width 0.12s linear; }
 
 /* ---------------------------------------------------------------- controls */
-.controls { display: grid; gap: 4px; padding: 6px 14px; }
+/* minmax(0, 1fr): a long sub-label must not widen the card beyond the window. */
+.controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 6px 14px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 50px; }
 .row + .row { border-top: 1px solid var(--border); }
 .row-label { display: flex; flex-direction: column; min-width: 0; }
@@ -344,14 +357,37 @@ kbd {
 .menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px 6px; }
 
 .toast {
-  position: fixed; left: 50%; bottom: 54px; transform: translateX(-50%);
-  max-width: calc(100% - 32px); padding: 9px 14px; border-radius: 10px;
+  position: fixed; left: 50%; bottom: 54px; transform: translateX(-50%); z-index: 20;
+  width: max-content; max-width: min(440px, calc(100vw - 32px)); padding: 9px 14px; border-radius: 10px;
   background: var(--panel-3); border: 1px solid var(--border-strong);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); font-size: 12.5px;
   animation: toast-in 0.25s var(--ease);
 }
 .toast[data-tone="err"] { border-color: rgba(239, 68, 68, 0.45); }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+
+.select:disabled { opacity: 0.6; cursor: default; }
+
+/* Short windows (laptops at 125-150 % scale): tighter layout so that "Go live"
+   and "Set up" stay visible without scrolling. */
+@media (max-height: 720px) {
+  .topbar { padding-top: 10px; }
+  .main { gap: 10px; }
+  .card { padding: 12px; }
+  .tile { min-height: 76px; padding: 10px; gap: 7px; }
+  .tile-icon { width: 28px; height: 28px; border-radius: 8px; font-size: 13px; }
+  .tile-icon img { width: 24px; height: 24px; }
+  .tile-sub { margin-top: -4px; }
+  .sources { max-height: 190px; }  /* two full rows of compact tiles */
+  .live-zone { gap: 8px; padding-top: 2px; }
+  .live-btn { width: 108px; height: 108px; }
+  .live-icon { width: 32px; height: 32px; }
+  .row { min-height: 44px; }
+  .setup { gap: 10px; padding-top: 4px; }
+  .setup-art { display: none; }
+  .setup h1 { font-size: 18px; }
+  .steps li { padding: 7px 10px; }
+}
 
 .still *, .still *::before, .still *::after { animation: none !important; transition: none !important; }
 

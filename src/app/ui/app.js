@@ -1,7 +1,7 @@
 // Somike UI. Renders the state pushed by the native app (WebView2) and sends
 // user actions back. Without WebView2 (plain browser) a mock backend is used,
 // so the design can be previewed and iterated on: add ?scenario=setup|live|
-// waiting|enhancements|empty to the URL.
+// waiting|enhancements|update|empty to the URL.
 "use strict";
 
 const $ = (id) => document.getElementById(id);
@@ -35,6 +35,20 @@ function receive(message) {
 }
 
 // ------------------------------------------------------------------ helpers
+// State arrives several times per second while live (level meter). Only touch
+// the DOM when something changed: rewriting identical text makes screen
+// readers re-announce live regions (banner, status line) over and over.
+function setText(el, text) {
+  if (el.textContent !== text) el.textContent = text;
+}
+const lastHtml = new WeakMap();
+function setHtml(el, html) {
+  if (lastHtml.get(el) !== html) {
+    lastHtml.set(el, html);
+    el.innerHTML = html;
+  }
+}
+
 const escapeHtml = (text) =>
   String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -84,15 +98,19 @@ function render() {
   renderMics(s);
   renderPill(s);
   renderFooter(s, micName);
+  // Repair/remove only make sense once Somike is set up on this microphone.
+  for (const item of document.querySelectorAll("#menu [data-installed]")) {
+    item.hidden = s.view === "setup" || !s.injector.installed;
+  }
 
   if (s.view === "setup") {
     const busy = s.setup.busy;
     const btn = $("setup-btn");
     btn.classList.toggle("busy", busy);
     btn.disabled = busy || !mic;
-    btn.querySelector(".btn-label").textContent = busy ? "Setting up…" : "Set up";
+    setText(btn.querySelector(".btn-label"), busy ? "Setting up…" : "Set up");
     const msg = $("setup-msg");
-    msg.textContent = s.setup.message || (mic ? "" : "No microphone found. Plug one in.");
+    setText(msg, s.setup.message || (mic ? "" : "No microphone found. Plug one in, then it appears here."));
     msg.dataset.tone = s.setup.error ? "err" : "info";
     return;
   }
@@ -102,12 +120,12 @@ function render() {
   if (s.injector.enhancementsOff || s.injector.needsUpdate) {
     banner.hidden = false;
     const repair = s.injector.enhancementsOff;
-    $("banner-text").textContent = repair
+    setText($("banner-text"), repair
       ? "Windows turned off audio enhancements for this mic, so nothing can be mixed in."
-      : "Update the mic connection so Discord and games hear Somike too.";
-    $("banner-btn").textContent = s.setup.busy
+      : "Update the mic connection so Discord and games hear Somike too.");
+    setText($("banner-btn"), s.setup.busy
       ? (repair ? "Repairing…" : "Updating…")
-      : (repair ? "Repair" : "Update");
+      : (repair ? "Repair" : "Update"));
     $("banner-btn").disabled = s.setup.busy;
     $("banner-btn").dataset.cmd = "repair";
   } else {
@@ -120,9 +138,9 @@ function render() {
   const btn = $("live-btn");
   const phase = s.live.on ? s.live.phase : "off";
   btn.setAttribute("aria-pressed", String(s.live.on));
-  btn.dataset.waiting = String(phase === "waiting");
+  btn.dataset.phase = phase;
   btn.disabled = !source || !s.injector.installed;
-  $("live-text").textContent = { off: "Go live", live: "Live", waiting: "Waiting", error: "Retrying" }[phase];
+  setText($("live-text"), { live: "Live", waiting: "Waiting", error: "Retrying" }[phase] || "Go live");
 
   const name = `<b>${escapeHtml(sourceName)}</b>`;
   let sub;
@@ -133,7 +151,7 @@ function render() {
   else if (!s.injector.micInUse) sub = `Live. Mixing starts when an app uses your mic`;
   else if (!source.system && !source.active) sub = `Live. Play something in ${name}`;
   else sub = `${name} is playing in your mic`;
-  $("live-sub").innerHTML = sub;
+  setHtml($("live-sub"), sub);
 
   const level = phase === "live" ? Math.min(1, Math.sqrt(s.level || 0)) : 0;
   $("meter-fill").style.width = `${Math.round(level * 100)}%`;
@@ -141,9 +159,9 @@ function render() {
   // Controls.
   if (!draggingGain) setGainUi(Math.round(s.gain * 100));
   $("mute").checked = s.muteMic;
-  $("mic-sub").textContent = s.micMutedInWindows
+  setText($("mic-sub"), s.micMutedInWindows
     ? "Muted in Windows, app audio still goes out"
-    : s.injector.installed ? "Connected" : "Not connected";
+    : s.injector.installed ? "Connected" : "Not connected");
 }
 
 function renderPill(s) {
@@ -156,7 +174,7 @@ function renderPill(s) {
     text = { live: "Live", waiting: "Waiting", error: "Error" }[s.live.phase] || "Off";
   }
   pill.dataset.tone = tone;
-  $("pill-text").textContent = text;
+  setText($("pill-text"), text);
 }
 
 function renderFooter(s, micName) {
@@ -171,7 +189,7 @@ function renderFooter(s, micName) {
   } else if (s.live.on && s.live.phase === "waiting") { tone = "warn"; text = "Waiting for the app to play"; }
   else if (s.live.on && s.live.phase === "error") { tone = "err"; text = s.live.message || "Error"; }
   el.dataset.tone = tone;
-  $("footer-text").textContent = text;
+  setText($("footer-text"), text);
 }
 
 function renderMics(s) {
@@ -179,10 +197,19 @@ function renderMics(s) {
   if (key === lastMicsKey) return;
   lastMicsKey = key;
   for (const select of [$("mic"), $("setup-mic")]) {
-    select.innerHTML = s.mics
-      .map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(shortMicName(m.name))}${m.isDefault ? " (default)" : ""}</option>`)
-      .join("");
+    select.innerHTML = s.mics.length
+      ? s.mics
+        .map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(shortMicName(m.name))}${m.isDefault ? " (default)" : ""}</option>`)
+        .join("")
+      : '<option value="">No microphone found</option>';
+    select.disabled = s.mics.length === 0;
     select.value = s.micId;
+    // The selected microphone was unplugged: show that instead of silently
+    // displaying another one (selecting the shown entry would not fire "change").
+    if (s.mics.length && select.value !== s.micId) {
+      select.insertAdjacentHTML("afterbegin", '<option value="" disabled>Choose a microphone</option>');
+      select.value = "";
+    }
   }
 }
 
@@ -227,6 +254,18 @@ function bindEvents() {
     const tile = e.target.closest(".tile");
     if (tile) send("selectSource", { id: tile.dataset.id });
   });
+  // Arrow keys move the focus between tiles (Enter/Space picks one), so
+  // keyboard users don't have to tab through every app.
+  $("sources").addEventListener("keydown", (e) => {
+    const tiles = [...document.querySelectorAll("#sources .tile")];
+    const index = tiles.indexOf(document.activeElement);
+    if (index < 0) return;
+    const perRow = Math.max(1, Math.round($("sources").clientWidth / tiles[0].offsetWidth));
+    const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: perRow, ArrowUp: -perRow }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    tiles[Math.min(tiles.length - 1, Math.max(0, index + step))].focus();
+  });
   $("live-btn").addEventListener("click", () => send("toggleLive"));
   $("setup-btn").addEventListener("click", () => send("setup"));
   $("banner-btn").addEventListener("click", (e) => send(e.currentTarget.dataset.cmd));
@@ -257,19 +296,36 @@ function bindEvents() {
 
   const menu = $("menu");
   const more = $("more");
+  const closeMenu = (restoreFocus) => {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    more.setAttribute("aria-expanded", "false");
+    if (restoreFocus) more.focus();
+  };
   more.addEventListener("click", (e) => {
     e.stopPropagation();
-    menu.hidden = !menu.hidden;
-    more.setAttribute("aria-expanded", String(!menu.hidden));
+    if (!menu.hidden) return closeMenu(false);
+    menu.hidden = false;
+    more.setAttribute("aria-expanded", "true");
+    const first = menu.querySelector("button:not([hidden])");
+    if (first && e.detail === 0) first.focus();  // opened with the keyboard
   });
   menu.addEventListener("click", (e) => {
     const item = e.target.closest("[data-cmd]");
     if (!item) return;
-    menu.hidden = true;
+    closeMenu(false);
     send(item.dataset.cmd);
   });
-  document.addEventListener("click", () => { menu.hidden = true; });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") menu.hidden = true; });
+  menu.addEventListener("keydown", (e) => {
+    const items = [...menu.querySelectorAll("button:not([hidden])")];
+    const index = items.indexOf(document.activeElement);
+    const step = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    items[(index + step + items.length) % items.length].focus();
+  });
+  document.addEventListener("click", () => closeMenu(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(true); });
   // No browser context menu / zoom in the app window.
   document.addEventListener("contextmenu", (e) => { if (bridge) e.preventDefault(); });
 }

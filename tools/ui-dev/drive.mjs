@@ -11,7 +11,8 @@ import { writeFileSync } from "node:fs";
 const [port = "9222", command, ...args] = process.argv.slice(2);
 
 async function findPage() {
-  for (let attempt = 0; attempt < 50; attempt++) {
+  // Up to 60 s: the first WebView2 start on a fresh machine is slow.
+  for (let attempt = 0; attempt < 300; attempt++) {
     try {
       const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
       const page = targets.find((t) => t.type === "page" && t.url.startsWith("https://app.somike/"));

@@ -245,6 +245,17 @@ LRESULT WebWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
         case WM_CLOSE:
             ::DestroyWindow(hwnd_);
             return 0;
+        case WM_QUERYENDSESSION:
+            return TRUE;  // nothing unsaved to ask about
+        case WM_ENDSESSION:
+            // Log-off, shutdown, or the installer closing Somike through the
+            // Restart Manager: Windows may end the process right after this
+            // message, so save now and close the window properly.
+            if (wparam != FALSE) {
+                controller_.SaveSettings();
+                ::DestroyWindow(hwnd_);
+            }
+            return 0;
         case WM_DESTROY:
             ::KillTimer(hwnd_, kTickTimer);
             if (hotkey_registered_) {

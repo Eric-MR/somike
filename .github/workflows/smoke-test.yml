@@ -1,0 +1,83 @@
+name: Smoke test
+
+# Installs the setup program on fresh GitHub-hosted VMs with different Windows
+# versions, drives the real app, updates it while it runs and uninstalls it
+# (scripts/smoke-test.ps1). The VMs have no microphone, so this covers setup,
+# app start, UI and clean removal, not the audio path itself.
+# Called by ci.yml and release.yml once the setup program is built.
+
+on:
+  workflow_call:
+    inputs:
+      artifact:
+        description: Name of the artifact that contains Somike-Setup-*.exe
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  x64:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022   # build 20348: the oldest supported Windows
+            name: Windows Server 2022 (build 20348)
+          - os: windows-2025   # build 26100: same base as Windows 11 24H2
+            name: Windows Server 2025 (build 26100)
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact }}
+          path: setup
+
+      - name: Install, use, update and uninstall Somike
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem setup -Filter 'Somike-Setup-*.exe' | Select-Object -First 1).FullName
+          ./scripts/smoke-test.ps1 -Setup $setup -OutDir smoke-results
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-${{ matrix.os }}
+          path: smoke-results
+          if-no-files-found: warn
+
+  arm64:
+    name: Windows 11 ARM64 (setup must refuse)
+    runs-on: windows-11-arm
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact }}
+          path: setup
+
+      - name: Setup refuses to install
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem setup -Filter 'Somike-Setup-*.exe' | Select-Object -First 1).FullName
+          ./scripts/smoke-test.ps1 -Setup $setup -OutDir smoke-results -ExpectRefusal
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-windows-11-arm
+          path: smoke-results
+          if-no-files-found: warn

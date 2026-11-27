@@ -54,3 +54,23 @@ jobs:
             build/ci/bin/somike-apoctl.pdb
             build/ci/bin/somike_apo.pdb
             build/ci/bin/somike-selftest.pdb
+
+      - name: Build the setup program
+        if: matrix.preset == 'ci'
+        shell: pwsh
+        run: ./scripts/build-installer.ps1 -Preset ci -DownloadWebView2
+
+      - name: Upload the setup program
+        if: matrix.preset == 'ci'
+        uses: actions/upload-artifact@v7
+        with:
+          name: somike-setup
+          if-no-files-found: error
+          path: build/installer/Somike-Setup-*.exe
+
+  smoke:
+    name: Smoke test
+    needs: build
+    uses: ./.github/workflows/smoke-test.yml
+    with:
+      artifact: somike-setup

@@ -73,7 +73,8 @@ missing or stale, it passes the microphone through unchanged. Details:
 | Exclusive-mode capture | no effects at all | inherent; documented. Voice apps use shared mode |
 | App-side processing (noise suppression, AGC) | music may be filtered after injection | user setting in the consuming app |
 | **Code integrity: Smart App Control / WDAC** | unsigned binaries are blocked, including DLLs loaded into `audiodg.exe`. Observed on the development machine, where SAC blocked the freshly built executables | sign release builds (Authenticode via Azure Trusted Signing or an OV/EV certificate). Per Microsoft, an unsigned APO also fails to load when the graph runs protected (DRM) content |
-| Process loopback needs Windows 10 build 20348+ / Windows 11 | older Windows 10 builds cannot capture per app | documented minimum OS |
+| Process loopback needs build 20348+ | Windows 10 (last build 19045) cannot capture per app; in practice Windows 11 only (or Windows Server 2022+) | documented; the setup program refuses older builds |
+| ARM64 Windows | the audio engine is native ARM64 and cannot load an x64 APO | the setup program refuses ARM64; an ARM64(EC) APO build is a future option |
 | *All system audio* includes voice-chat output | other participants hear themselves | per-app routing is the default recommendation; UI wording warns |
 | Diagnostics block is shared by all APO instances | status shows "the injector is alive somewhere", not per microphone | sufficient for v0.1; per-endpoint slots are a protocol v2 candidate |
 
