@@ -6,6 +6,7 @@
   <title>Somike</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="soundboard.css">
 </head>
 <body>
   <div id="app" class="app" data-view="loading">
@@ -26,6 +27,23 @@
       </div>
       <div id="pill" class="pill" data-tone="idle"><span class="dot"></span><span id="pill-text">Starting</span></div>
     </header>
+
+    <!-- Sections of the everyday screen (styles and logic: soundboard.css/js). -->
+    <nav id="tabs" class="tabs" role="tablist" aria-label="Sections">
+      <button id="tab-mic" class="tab" type="button" role="tab" data-tab="mic" aria-selected="true" aria-controls="main">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="7" y="2.5" width="6" height="10" rx="3" fill="currentColor"/>
+          <path d="M4.5 9.5a5.5 5.5 0 0 0 11 0M10 15v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+        App audio
+      </button>
+      <button id="tab-sounds" class="tab" type="button" role="tab" data-tab="sounds" aria-selected="false" aria-controls="soundboard">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="2.5" width="6.2" height="6.2" rx="1.8" fill="currentColor"/>
+          <rect x="11.3" y="2.5" width="6.2" height="6.2" rx="1.8" fill="currentColor" opacity=".55"/>
+          <rect x="2.5" y="11.3" width="6.2" height="6.2" rx="1.8" fill="currentColor" opacity=".55"/>
+          <rect x="11.3" y="11.3" width="6.2" height="6.2" rx="1.8" fill="currentColor"/></svg>
+        Soundboard
+        <span class="eq tab-eq" aria-hidden="true"><i></i><i></i><i></i></span>
+      </button>
+    </nav>
 
     <!-- One-time setup: shown while the injector is not on the selected microphone. -->
     <section id="setup" class="setup" hidden>
@@ -108,6 +126,169 @@
       </section>
     </main>
 
+    <!-- Soundboard: short sounds played into the mic with a click or a hotkey. -->
+    <section id="soundboard" class="soundboard" role="tabpanel" aria-labelledby="tab-sounds">
+      <div class="sb-toolbar">
+        <label class="sb-search">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7"/>
+            <path d="M13 13l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <input id="sb-filter" type="search" placeholder="Find a sound" aria-label="Find a sound" autocomplete="off" spellcheck="false">
+        </label>
+        <button id="sb-browse" class="btn btn-small" type="button" title="Free sound effects from the internet">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9m0 0l-3.5-3.5M10 12l3.5-3.5M4 14.5v1A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-1"
+            fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Get sounds
+        </button>
+        <button id="sb-add" class="btn btn-small btn-primary" type="button" title="Add your own audio files">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Add files
+        </button>
+      </div>
+
+      <div id="sb-notready" class="banner" role="status" hidden>
+        <span>Only you hear the sounds until Somike is set up on your microphone.</span>
+      </div>
+
+      <section class="card sb-strip" aria-label="Soundboard volume">
+        <div class="row">
+          <div class="row-label"><span>In my mic</span><small>How loud others hear the sounds</small></div>
+          <div class="slider">
+            <input id="sb-mic-volume" type="range" min="0" max="200" step="1" value="80" aria-label="Sound volume in the microphone">
+            <output id="sb-mic-volume-out" for="sb-mic-volume">80%</output>
+          </div>
+        </div>
+        <div class="row">
+          <div class="row-label"><span>Hear them myself</span><small>On your speakers or headphones</small></div>
+          <div class="slider">
+            <label class="switch"><input id="sb-monitor" type="checkbox" checked aria-label="Hear the sounds myself"><span class="track"></span></label>
+            <input id="sb-monitor-volume" type="range" min="0" max="200" step="1" value="50" aria-label="My volume">
+            <output id="sb-monitor-volume-out" for="sb-monitor-volume">50%</output>
+          </div>
+        </div>
+        <div class="row">
+          <div class="row-label"><span>Stop all sounds</span><small>Hotkey that works in every app</small></div>
+          <button id="sb-stop-key" class="key-btn" type="button" data-target="">Set hotkey</button>
+        </div>
+      </section>
+
+      <div id="sb-pads" class="sb-pads" role="list" aria-label="Sounds"></div>
+      <p id="sb-nomatch" class="hint sb-nomatch" hidden>No sound matches your search.</p>
+
+      <div id="sb-empty" class="sb-empty" hidden>
+        <div class="sb-empty-art" aria-hidden="true">
+          <span style="--pad:#ec4899">📯</span><span style="--pad:#8b5cf6">👏</span><span style="--pad:#f97316">🥁</span>
+        </div>
+        <h3>Your soundboard is empty</h3>
+        <p>Drop audio files here (MP3, WAV, FLAC, M4A, OGG…) or grab free sound effects. Give each one a hotkey and play it into any voice chat.</p>
+        <div class="sb-empty-actions">
+          <button class="btn btn-primary" type="button" data-sb="browse">Get free sounds</button>
+          <button class="btn" type="button" data-sb="import">Add files</button>
+        </div>
+      </div>
+    </section>
+
+    <button id="sb-stopall" class="sb-stopall" type="button" hidden>
+      <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2" fill="currentColor"/></svg>
+      Stop all <kbd id="sb-stopall-key" hidden></kbd>
+    </button>
+
+    <!-- Edit one sound. -->
+    <div id="sb-edit" class="sheet" hidden>
+      <div class="sheet-backdrop" data-close></div>
+      <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sb-edit-title">
+        <header class="sheet-head">
+          <h3 id="sb-edit-title">Edit sound</h3>
+          <button class="icon-btn" type="button" data-close aria-label="Close">
+            <svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+        <div class="sheet-body">
+          <div class="sb-edit-top">
+            <button id="sb-edit-icon" class="sb-edit-icon" type="button" title="Test: only you hear it" aria-label="Test the sound (only you hear it)"></button>
+            <label class="field sb-edit-name">
+              <span class="field-label">Name</span>
+              <input id="sb-edit-name" class="input" type="text" maxlength="60" autocomplete="off" spellcheck="false">
+            </label>
+          </div>
+          <div class="field">
+            <span class="field-label">Icon</span>
+            <div id="sb-emojis" class="sb-emojis" role="group" aria-label="Icon"></div>
+          </div>
+          <div class="field">
+            <span class="field-label">Colour</span>
+            <div id="sb-colors" class="sb-colors" role="group" aria-label="Colour"></div>
+          </div>
+          <div class="sb-edit-rows">
+            <div class="row">
+              <div class="row-label"><span>Volume</span><small>On top of the board volume</small></div>
+              <div class="slider">
+                <input id="sb-edit-volume" type="range" min="0" max="200" step="1" value="100" aria-label="Volume of this sound">
+                <output id="sb-edit-volume-out" for="sb-edit-volume">100%</output>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-label"><span>Hotkey</span><small id="sb-edit-key-hint">Plays the sound from any app, even in games</small></div>
+              <div class="key-wrap">
+                <button id="sb-edit-key" class="key-btn" type="button">Set hotkey</button>
+                <button id="sb-edit-key-clear" class="icon-btn" type="button" aria-label="Remove hotkey" title="Remove hotkey">
+                  <svg viewBox="0 0 20 20"><path d="M6 6l8 8M14 6l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <p id="sb-edit-credit" class="sb-credit" hidden></p>
+        </div>
+        <footer class="sheet-foot">
+          <button id="sb-edit-delete" class="btn btn-danger" type="button">Delete</button>
+          <span class="spacer"></span>
+          <button id="sb-edit-test" class="btn" type="button" title="Only you hear it">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 5.5v9l7.5-4.5z" fill="currentColor"/></svg>Test
+          </button>
+          <button class="btn btn-primary" type="button" data-close>Done</button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- Free sound effects (Openverse: Freesound, Wikimedia Commons). -->
+    <div id="sb-browse-sheet" class="sheet sheet-tall" hidden>
+      <div class="sheet-backdrop" data-close></div>
+      <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sb-browse-title">
+        <header class="sheet-head">
+          <div>
+            <h3 id="sb-browse-title">Free sound effects</h3>
+            <small class="sheet-sub">Public domain (CC0): free to use anywhere, no credit needed</small>
+          </div>
+          <button class="icon-btn" type="button" data-close aria-label="Close">
+            <svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+        <form id="sb-search-form" class="sb-search-row" autocomplete="off">
+          <label class="sb-search">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M13 13l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <input id="sb-query" type="search" maxlength="100" placeholder="air horn, applause, drum roll…" aria-label="Search free sounds" spellcheck="false">
+          </label>
+          <button class="btn btn-small btn-primary" type="submit">Search</button>
+        </form>
+        <div id="sb-chips" class="sb-chips" aria-label="Popular"></div>
+        <div id="sb-results" class="sb-results" aria-live="polite"></div>
+        <footer class="sheet-foot sb-attrib">
+          From <button type="button" class="link" data-link="https://freesound.org/">Freesound</button> and
+          <button type="button" class="link" data-link="https://commons.wikimedia.org/">Wikimedia Commons</button>, found with
+          <button type="button" class="link" data-link="https://openverse.org/">Openverse</button>. ▶ plays only for you.
+        </footer>
+      </div>
+    </div>
+
+    <div id="sb-drop" class="sb-drop" hidden>
+      <div class="sb-drop-inner">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 17v1.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V17"
+          fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <b>Drop to add to your soundboard</b>
+        <small>MP3, WAV, FLAC, M4A, OGG…</small>
+      </div>
+    </div>
+
     <footer class="footer">
       <span id="footer-status" class="footer-status" data-tone="idle"><span class="dot"></span><span id="footer-text">Starting</span></span>
       <span class="keys" title="Global shortcut"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>M</kbd></span>
@@ -128,5 +309,6 @@
     <div id="toast" class="toast" role="status" hidden></div>
   </div>
   <script src="app.js"></script>
+  <script src="soundboard.js"></script>
 </body>
 </html>

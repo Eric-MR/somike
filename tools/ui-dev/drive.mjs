@@ -6,6 +6,9 @@
 //   node tools/ui-dev/drive.mjs 9222 click "[data-id='spotify.exe']"
 //   node tools/ui-dev/drive.mjs 9222 eval "state.live"
 //   node tools/ui-dev/drive.mjs 9222 wait "state && state.live.phase === 'live'" 10000
+//   node tools/ui-dev/drive.mjs 9222 files "#picker" C:\sounds\a.mp3 C:\sounds\b.wav
+//     (puts real files into an <input type=file>, e.g. to test drag & drop
+//      with chrome.webview.postMessageWithAdditionalObjects)
 import { writeFileSync } from "node:fs";
 
 const [port = "9222", command, ...args] = process.argv.slice(2);
@@ -80,8 +83,16 @@ try {
       console.log(`ok after ${Date.now() - start} ms`);
       break;
     }
+    case "files": {
+      const { root } = await call("DOM.getDocument");
+      const { nodeId } = await call("DOM.querySelector", { nodeId: root.nodeId, selector: args[0] });
+      if (!nodeId) throw new Error(`no element ${args[0]}`);
+      await call("DOM.setFileInputFiles", { nodeId, files: args.slice(1) });
+      console.log(`set ${args.length - 1} file(s) on ${args[0]}`);
+      break;
+    }
     default:
-      throw new Error("commands: screenshot <file> | click <selector> | eval <js> | wait <js> [ms]");
+      throw new Error("commands: screenshot <file> | click <selector> | eval <js> | wait <js> [ms] | files <selector> <path...>");
   }
 } catch (error) {
   console.error(error.message);

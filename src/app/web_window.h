@@ -15,10 +15,12 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "app_controller.h"
 #include "icon_cache.h"
 #include "somike/core/elevated_tool.h"
+#include "soundboard_bridge.h"
 
 namespace somike::app {
 
@@ -54,7 +56,7 @@ private:
     void FailWebView(HRESULT hr);
     void ResizeWebView();
 
-    void OnWebMessage(const std::string& json);
+    void OnWebMessage(const std::string& json, const std::vector<std::wstring>& dropped_files = {});
     void Tick();
     void PushState(bool force);
     void PushIcons();
@@ -66,6 +68,7 @@ private:
     void OnInstallerFinished(std::unique_ptr<core::ElevatedToolResult> result);
 
     AppController& controller_;
+    SoundboardBridge soundboard_bridge_;
     WindowOptions options_;
     HWND hwnd_ = nullptr;
     HBRUSH background_ = nullptr;

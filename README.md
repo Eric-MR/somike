@@ -84,6 +84,29 @@ somike-apoctl uninstall --all --restart-audio
 somike-selftest --modes                 # end-to-end check on the default mic (plays a test tone)
 ```
 
+## Soundboard
+
+The **Soundboard** tab plays short sounds straight into your microphone, with
+a click or a global hotkey, whether or not an app is live at the same time.
+
+- **Your own files**: **Add files** or drag & drop MP3, WAV, FLAC, M4A/AAC,
+  WMA (Ogg/Opus with the free *Web Media Extensions* from the Microsoft
+  Store). Files are copied into `%LOCALAPPDATA%\Somike\Soundboard`, so the
+  board keeps working when the originals move. Up to 5 minutes per sound.
+- **Free sound effects**: **Get sounds** searches thousands of short effects
+  on [Freesound](https://freesound.org) and
+  [Wikimedia Commons](https://commons.wikimedia.org) through
+  [Openverse](https://openverse.org). Only public-domain (CC0) sounds are
+  offered, so they are free to use in any voice chat without giving credit.
+  ▶ lets you listen first (only you hear it); the credit of every downloaded
+  sound is kept and shown.
+- **Hotkeys**: every sound can get one (e.g. *Num 1*, *F13*, *Ctrl+Alt+1*),
+  plus one to stop all sounds. They work in every app, also in games.
+- **Hear them myself**: sounds also play on your speakers/headphones, with
+  their own volume, separate from how loud they are in the mic.
+- Click a playing sound to stop it; edit name, icon, colour, volume and hotkey
+  with **⋯** (or a right-click).
+
 ## Building from source
 
 Visual Studio 2022/2026 or the Build Tools with the C++ workload, CMake 3.25+

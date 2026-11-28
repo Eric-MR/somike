@@ -5,11 +5,15 @@
 ```
 +--------------------------- user session -----------------------------+
 | somike.exe (unelevated)                                              |
-|   MainWindow (Win32 view)                                            |
+|   WebWindow (WebView2 UI) + SoundboardBridge (hotkeys, sb.* JSON)    |
 |     -> AppController (UI-free app logic, settings)                   |
-|          -> core::Router                                             |
+|          |- Soundboard (library, decode cache, Openverse, downloads)  |
+|          |     |- dsp::VoiceMixer  (up to 16 voices)                 |
+|          |     '- core::RenderStream -> speakers (monitor, optional) |
+|          '- core::Router                                             |
 |               |- core::LoopbackCapture  <- WASAPI process loopback   |
 |               |     (MMCSS "Audio" thread, 48 kHz stereo float)      |
+|               |- pump thread (sounds while no app audio flows)       |
 |               '- dsp::RingWriter ----------------+                   |
 +---------------------------------------------------|------------------+
                                                     v
@@ -35,13 +39,13 @@ somike-apoctl.exe (elevated via UAC, one-time):
 | Library / binary | Responsibility | Depends on |
 |---|---|---|
 | `somike::protocol` (header-only) | Shared-memory layout, constants, APO identity | - |
-| `somike::dsp` | Ring writer/reader, resampler, mixer, `Injector`. **No Win32**, fully unit-tested | protocol |
+| `somike::dsp` | Ring writer/reader, resampler, mixer, `Injector`; soundboard `VoiceMixer`, offline sinc converter, `FramePacer` and `PumpScheduler` (when the soundboard pump writes). **No Win32**, fully unit-tested | protocol |
 | `somike::common` | RAII handles, HRESULT text, registry, file mapping, paths, logging. No shell32/user32 (linked into the APO) | protocol |
 | `somike::installer` | Endpoint IDs, FxProperties snapshot, **pure install planner**, elevated operations with backup/restore | common, dsp |
-| `somike::core` | Device + session enumeration, process-loopback capture, `Router`, settings, injector status, elevated-tool launcher | common, dsp, installer |
+| `somike::core` | Device + session enumeration, process-loopback capture, `Router` (ring producer, mixes the soundboard in), audio file decoding (Media Foundation), `RenderStream` (playback on the default device), settings, injector status, elevated-tool launcher | common, dsp, installer |
 | `somike_apo.dll` | COM APO shell around `dsp::Injector` | dsp, common |
 | `somike-apoctl.exe` | CLI: list/status/install/uninstall | core, installer |
-| `somike_app_core` | `AppController` (plug-and-play logic: app grouping by process tree, live state machine with auto re-attach), `app_state` (the UI JSON contract, unit-tested), icon cache | core |
+| `somike_app_core` | `AppController` (plug-and-play logic: app grouping by process tree, live state machine with auto re-attach), `app_state` (the UI JSON contract, unit-tested), icon cache; `Soundboard` (library file, imports, decode cache, Openverse catalogue, WinHTTP downloads, background `TaskRunner`) | core |
 | `somike.exe` | `WebWindow`: Win32 window hosting WebView2; serves the embedded HTML UI (`src/app/ui`) from `https://app.somike/` with a strict CSP, bridges JSON messages | app_core, WebView2 loader (static) |
 
 Rules of thumb: logic goes into the lowest layer that can hold it, and pure
@@ -54,7 +58,18 @@ can be tested without hardware or administrator rights.
   locks, logging, system calls (except `GetTickCount64`) or exceptions.
   Buffers are allocated in `LockForProcess`, and the file is mapped there too.
 - **Capture thread** (`LoopbackCapture`): event-driven WASAPI loop on an MMCSS
-  "Audio" thread; writes to the ring and heartbeats every <=100 ms.
+  "Audio" thread; mixes the soundboard into each block, writes to the ring and
+  heartbeats every <=100 ms.
+- **Pump thread** (`Router`, started by the first sound): while sounds play
+  and no app audio arrived for 30 ms, writes the sounds every 10 ms (high
+  resolution waitable timer) at the pace of the system clock (`FramePacer`).
+  After a pause it leads in with 30 ms of silence, so the APO's re-priming
+  reader skips silence instead of the start of the sound. Keeps the session
+  open for 1.5 s after the last sound. Exactly one of capture thread and pump
+  writes at a time (`write_mutex_`).
+- **Soundboard**: decoding and downloads run on `TaskRunner` workers (COM MTA);
+  results come back to the UI thread through a window message. The monitor
+  output (`RenderStream`) opens on demand and closes after 3 s of silence.
 - **UI thread** (STA, required by WebView2): owns `AppController` and ticks it
   every 250 ms (sources every 1.5 s, injector status every 1 s); pushes the UI
   state as JSON only when it changed. `Router` start/stop/gain calls are
@@ -84,8 +99,9 @@ can be tested without hardware or administrator rights.
   machines; the portable `cmake --install` layout already matches.
 - **Tray icon / start with Windows**: `AppController` is UI-free, so a tray
   front-end is additive.
-- **Multiple sources mixed**: several `LoopbackCapture` instances feeding a
-  mixer before the `RingWriter`.
+- **Multiple sources mixed**: the soundboard already shares the ring with the
+  routed app (ADR 0006); several `LoopbackCapture` instances could join the
+  same mix.
 - **Better resampler**: replace `LinearResampler` (same interface) with a
   polyphase/windowed-sinc implementation.
 - **Wrap OEM effects**: load the original driver APO inside `somike_apo.dll`

@@ -60,6 +60,8 @@ constexpr UiFile kUiFiles[] = {
     {L"/index.html", IDR_UI_INDEX_HTML, L"text/html; charset=utf-8"},
     {L"/app.css", IDR_UI_APP_CSS, L"text/css; charset=utf-8"},
     {L"/app.js", IDR_UI_APP_JS, L"text/javascript; charset=utf-8"},
+    {L"/soundboard.css", IDR_UI_SOUNDBOARD_CSS, L"text/css; charset=utf-8"},
+    {L"/soundboard.js", IDR_UI_SOUNDBOARD_JS, L"text/javascript; charset=utf-8"},
 };
 
 // Takes ownership of a CoTaskMem string.
@@ -111,7 +113,9 @@ std::wstring ShortDeviceName(const std::wstring& name) {
 }  // namespace
 
 WebWindow::WebWindow(AppController& controller, WindowOptions options)
-    : controller_(controller), options_(std::move(options)) {}
+    : controller_(controller),
+      soundboard_bridge_(controller, [this](const std::string& json) { PostJson(json); }),
+      options_(std::move(options)) {}
 
 WebWindow::~WebWindow() {
     if (background_ != nullptr) {
@@ -170,6 +174,7 @@ bool WebWindow::Create(HINSTANCE instance, int show) {
     if (!hotkey_registered_) {
         log::Warn(L"Ctrl+Alt+M is already used by another program");
     }
+    soundboard_bridge_.Attach(hwnd_);
     ::SetTimer(hwnd_, kTickTimer, kTickMs, nullptr);
     StartWebView();
     return true;
@@ -236,7 +241,12 @@ LRESULT WebWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
                 controller_.ToggleLive();
                 PushState(false);
                 UpdateTitle();
+            } else {
+                soundboard_bridge_.HandleHotkey(wparam);
             }
+            return 0;
+        case SoundboardBridge::kWakeMessage:
+            soundboard_bridge_.OnWake();
             return 0;
         case WM_APP_INSTALLER_DONE:
             OnInstallerFinished(std::unique_ptr<core::ElevatedToolResult>(
@@ -261,6 +271,7 @@ LRESULT WebWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
             if (hotkey_registered_) {
                 ::UnregisterHotKey(hwnd_, kHotkeyId);
             }
+            soundboard_bridge_.Detach();
             if (webview_controller_) {
                 webview_controller_->Close();
             }
@@ -380,9 +391,28 @@ void WebWindow::ConfigureWebView() {
                 if (FAILED(args->get_Source(&source)) || !TakeCoString(source).starts_with(kUiOrigin)) {
                     return S_OK;  // only our own page may drive the app
                 }
+                // Files dropped on the page arrive as additional objects
+                // (chrome.webview.postMessageWithAdditionalObjects).
+                std::vector<std::wstring> files;
+                ComPtr<ICoreWebView2WebMessageReceivedEventArgs2> args2;
+                ComPtr<ICoreWebView2ObjectCollectionView> objects;
+                UINT32 count = 0;
+                if (SUCCEEDED(args->QueryInterface(IID_PPV_ARGS(&args2))) &&
+                    SUCCEEDED(args2->get_AdditionalObjects(&objects)) && objects &&
+                    SUCCEEDED(objects->get_Count(&count))) {
+                    for (UINT32 i = 0; i < count; ++i) {
+                        ComPtr<IUnknown> object;
+                        ComPtr<ICoreWebView2File> file;
+                        LPWSTR path = nullptr;
+                        if (SUCCEEDED(objects->GetValueAtIndex(i, &object)) && object &&
+                            SUCCEEDED(object.As(&file)) && SUCCEEDED(file->get_Path(&path))) {
+                            files.push_back(TakeCoString(path));
+                        }
+                    }
+                }
                 LPWSTR json = nullptr;
                 if (SUCCEEDED(args->get_WebMessageAsJson(&json))) {
-                    OnWebMessage(text::ToUtf8(TakeCoString(json)));
+                    OnWebMessage(text::ToUtf8(TakeCoString(json)), files);
                 }
                 return S_OK;
             })
@@ -489,17 +519,22 @@ void WebWindow::ResizeWebView() {
 // ---------------------------------------------------------------------------
 // UI bridge
 // ---------------------------------------------------------------------------
-void WebWindow::OnWebMessage(const std::string& json) {
+void WebWindow::OnWebMessage(const std::string& json, const std::vector<std::wstring>& dropped_files) {
     const std::optional<UiCommand> command = ParseCommand(json);
     if (!command) {
         return;
     }
     const std::string& cmd = command->cmd;
     const std::wstring id = text::FromUtf8(command->id);
+    if (cmd.starts_with("sb.")) {
+        soundboard_bridge_.HandleCommand(cmd, json, dropped_files);
+        return;
+    }
     if (cmd == "ready") {
         ui_ready_ = true;
         sent_icons_.clear();
         last_state_json_.clear();
+        soundboard_bridge_.OnUiReady();
     } else if (cmd == "selectSource") {
         controller_.SelectSource(id);
     } else if (cmd == "toggleLive") {
@@ -538,6 +573,7 @@ void WebWindow::Tick() {
     controller_.Tick(::GetTickCount64());
     PushIcons();
     PushState(false);
+    soundboard_bridge_.Tick();
     UpdateTitle();
 }
 

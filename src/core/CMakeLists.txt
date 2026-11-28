@@ -3,11 +3,13 @@
 # No UI code lives here, so a tray app, CLI or service can reuse it.
 add_library(somike_core STATIC
     src/audio_devices.cpp
+    src/audio_file.cpp
     src/audio_sessions.cpp
     src/elevated_tool.cpp
     src/injector_status.cpp
     src/loopback_capture.cpp
     src/process_tree.cpp
+    src/render_stream.cpp
     src/router.cpp
     src/settings.cpp
 )
@@ -22,6 +24,9 @@ target_link_libraries(somike_core
     PRIVATE
         avrt
         version
+        mfplat
+        mfreadwrite
+        mfuuid
         mmdevapi
         ole32
         propsys
