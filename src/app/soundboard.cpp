@@ -103,6 +103,10 @@ bool NeedsStoreCodec(const std::wstring& ext) {
 }
 
 std::string DescribeDecodeError(HRESULT hr, const std::wstring& ext) {
+    if (hr == core::kMediaFoundationMissing) {
+        return "Windows Media Foundation is missing. On Windows N editions, add the \"Media Feature Pack\" "
+               "under Settings → System → Optional features";
+    }
     if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND)) {
         return "file not found";
     }

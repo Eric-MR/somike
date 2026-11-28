@@ -33,3 +33,13 @@ target_link_libraries(somike_core
         shell32
 )
 somike_configure_target(somike_core)
+
+# Windows N editions have no Media Foundation unless the Media Feature Pack is
+# installed. Executables that decode audio (DecodeAudioFile) delay-load it so
+# they still start there; DecodeAudioFile checks for it before the first call.
+# (Not on somike_core itself: /DELAYLOAD without matching imports is LNK4199,
+# an error under /WX.)
+function(somike_delay_load_media_foundation target)
+    target_link_options(${target} PRIVATE /DELAYLOAD:mfplat.dll /DELAYLOAD:mfreadwrite.dll)
+    target_link_libraries(${target} PRIVATE delayimp)
+endfunction()

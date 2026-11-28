@@ -16,6 +16,7 @@ add_executable(somike_tests
     apo/apo_com_test.cpp
     app/app_state_test.cpp
     app/sound_catalog_test.cpp
+    app/somike_exe_imports_test.cpp
     app/soundboard_library_test.cpp
     common/registry_codec_test.cpp
     core/audio_file_test.cpp
@@ -43,8 +44,10 @@ target_link_libraries(somike_tests PRIVATE
     GTest::gtest_main
 )
 somike_configure_target(somike_tests)
-# The APO COM tests load somike_apo.dll from the same output directory.
-add_dependencies(somike_tests somike_apo)
+somike_delay_load_media_foundation(somike_tests)
+# The APO COM tests load somike_apo.dll from the same output directory, the
+# import test reads somike.exe there.
+add_dependencies(somike_tests somike_apo somike)
 
 # PRE_TEST: enumerate tests when ctest runs, not as a post-build step, so the
 # build itself never has to execute a freshly built (unsigned) binary.

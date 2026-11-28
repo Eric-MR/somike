@@ -165,6 +165,9 @@ Please report security problems privately as described in
 - **Windows 11 only**: per-app capture (process loopback) needs build 20348+,
   which Windows 10 never got. **ARM64** Windows runs a native ARM64 audio
   engine that cannot load the x64 APO; the setup program refuses both.
+- **Windows N editions**: the soundboard decodes sounds with Media
+  Foundation, which N editions only have with the *Media Feature Pack*
+  (Settings → System → Optional features). Routing app audio works without it.
 - **Exclusive-mode streams** bypass all effects, so apps that open the mic
   that way (rare for voice apps) don't get the routed audio. Raw-mode capture,
   which Discord uses, is covered.

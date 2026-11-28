@@ -134,8 +134,19 @@ double DurationSeconds(IMFSourceReader* reader) {
 
 }  // namespace
 
+bool MediaFoundationAvailable() noexcept {
+    // Loaded once and kept: the delay-load helper then finds them by name.
+    static const bool available =
+        ::LoadLibraryExW(L"mfplat.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32) != nullptr &&
+        ::LoadLibraryExW(L"mfreadwrite.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32) != nullptr;
+    return available;
+}
+
 HRESULT DecodeAudioFile(const std::wstring& path, double max_seconds, DecodedAudio& out) {
     out = {};
+    if (!MediaFoundationAvailable()) {
+        return kMediaFoundationMissing;  // a delay-loaded call would raise instead
+    }
     const MediaFoundation mf;
     if (FAILED(mf.result())) {
         return mf.result();

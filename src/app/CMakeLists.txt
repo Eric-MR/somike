@@ -96,6 +96,7 @@ target_link_libraries(somike PRIVATE
 # Our manifest carries the UAC level; don't let the linker add a second one.
 target_link_options(somike PRIVATE /MANIFESTUAC:NO)
 somike_configure_target(somike)
+somike_delay_load_media_foundation(somike)
 
 # The app is only useful together with the APO and the installer tool, which
 # must sit next to somike.exe.

@@ -21,7 +21,15 @@ struct DecodedAudio {
 //
 // Call on a thread with COM initialised (MTA recommended). Fails with
 // MF_E_UNSUPPORTED_BYTESTREAM_TYPE / MF_E_INVALIDMEDIATYPE and friends for
-// files Windows cannot read.
+// files Windows cannot read, and with kMediaFoundationMissing where Windows
+// has no Media Foundation (N editions without the Media Feature Pack).
 [[nodiscard]] HRESULT DecodeAudioFile(const std::wstring& path, double max_seconds, DecodedAudio& out);
+
+inline constexpr HRESULT kMediaFoundationMissing = __HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND);
+
+// True if mfplat.dll and mfreadwrite.dll are in System32. Executables that
+// decode delay-load them (somike_delay_load_media_foundation in CMake), so
+// this must hold before the first Media Foundation call.
+[[nodiscard]] bool MediaFoundationAvailable() noexcept;
 
 }  // namespace somike::core
