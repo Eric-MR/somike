@@ -9,7 +9,7 @@ project(Somike
 # Pre-release label ("" for a final release). The full version string is
 # PROJECT_VERSION + suffix; the release workflow refuses a tag that differs
 # from "v<full version>".
-set(SOMIKE_VERSION_SUFFIX "-beta.2")
+set(SOMIKE_VERSION_SUFFIX "-beta.3")
 set(SOMIKE_VERSION_FULL "${PROJECT_VERSION}${SOMIKE_VERSION_SUFFIX}")
 
 if(NOT WIN32)
