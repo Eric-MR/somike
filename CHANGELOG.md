@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0-beta.3] - 2026-11-28
+
+Third public pre-release (**beta, not finished**): the soundboard.
+
 ### Added
 - **Soundboard** tab: play short sounds into the microphone with a click or a
   global hotkey, with or without a live app. Import your own files (MP3, WAV,
@@ -13,7 +17,9 @@ All notable changes to this project are documented here. The format follows
   free public-domain (CC0) effects from Freesound and Wikimedia Commons via
   Openverse, with preview and kept credits. Per-sound name, icon, colour,
   volume and hotkey, a stop-all hotkey, and an optional monitor output so you
-  hear the sounds yourself. See ADR 0006.
+  hear the sounds yourself. See ADR 0006. Sounds are decoded with Windows
+  Media Foundation: on Windows N editions add the *Media Feature Pack*
+  (Settings → System → Optional features); everything else works without it.
 - Router: a second, clock-independent source. Sounds are mixed into the
   captured app audio, or written by a paced pump thread while no app plays.
 
@@ -137,6 +143,7 @@ Internal foundation; never published.
   voice", start/stop button, global hotkey Ctrl+Alt+M, live injector status.
 - CMake presets, build script, GitHub Actions CI, unit tests.
 
-[Unreleased]: https://github.com/Eric-MR/somike/compare/v0.2.0-beta.2...HEAD
+[Unreleased]: https://github.com/Eric-MR/somike/compare/v0.2.0-beta.3...HEAD
+[0.2.0-beta.3]: https://github.com/Eric-MR/somike/compare/v0.2.0-beta.2...v0.2.0-beta.3
 [0.2.0-beta.2]: https://github.com/Eric-MR/somike/compare/v0.2.0-beta.1...v0.2.0-beta.2
 [0.2.0-beta.1]: https://github.com/Eric-MR/somike/releases/tag/v0.2.0-beta.1

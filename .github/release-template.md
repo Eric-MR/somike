@@ -2,7 +2,8 @@
 
 Requirements: **Windows 11** (x64) and a microphone. Windows 10 is not
 supported: per-app capture needs Windows build 20348 or newer. ARM64 PCs are
-not supported yet.
+not supported yet. On Windows N editions the soundboard needs the *Media
+Feature Pack* (Settings → System → Optional features).
 
 1. Download **`Somike-Setup-{{VERSION}}.exe`** below and run it.
 2. Keep **Connect Somike to my default microphone** checked. Windows asks
