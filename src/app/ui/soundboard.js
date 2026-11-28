@@ -608,6 +608,13 @@
       const chip = e.target.closest("button");
       if (chip) search(chip.textContent);
     });
+    // The chip row scrolls sideways without a scrollbar: let a mouse wheel do it.
+    $("sb-chips").addEventListener("wheel", (e) => {
+      const row = e.currentTarget;
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || row.scrollWidth <= row.clientWidth) return;
+      row.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }, { passive: false });
     $("sb-search-form").addEventListener("submit", (e) => {
       e.preventDefault();
       search($("sb-query").value);

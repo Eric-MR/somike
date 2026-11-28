@@ -67,6 +67,12 @@ const cases = [
     name: "toast", scenario: "ready",
     after: `toast("Connected to Corsair HS80 RGB USB Gaming Headset. Pick an app and go live. This is a deliberately long message.", "info");`,
   },
+  // Soundboard tab (soundboard.js mock: board=empty, sheet=browse|edit).
+  { name: "sb-board", scenario: "ready", tab: "sounds" },
+  { name: "sb-empty", scenario: "ready", tab: "sounds", query: "&board=empty" },
+  { name: "sb-not-ready", scenario: "setup", tab: "sounds" },
+  { name: "sb-browse", scenario: "ready", tab: "sounds", query: "&sheet=browse" },
+  { name: "sb-edit", scenario: "ready", tab: "sounds", query: "&sheet=edit" },
 ];
 
 // Runs in the page: returns a list of layout problems.
@@ -75,26 +81,35 @@ const checkLayout = `(() => {
   const vw = innerWidth, vh = innerHeight;
   const describe = (el) => el.id ? "#" + el.id : el.tagName.toLowerCase() + (el.className && typeof el.className === "string" ? "." + el.className.split(" ")[0] : "");
   const visible = (el) => !el.closest("[hidden]") && el.getClientRects().length > 0;
+  // Content of a sideways-scrolling row (e.g. the soundboard's search chips)
+  // may extend past the edge; the row itself is still checked.
+  const inScroller = (el) => {
+    for (let p = el.parentElement; p && p.id !== "app"; p = p.parentElement) {
+      const o = getComputedStyle(p).overflowX;
+      if (o === "auto" || o === "scroll") return true;
+    }
+    return false;
+  };
   if (document.documentElement.scrollWidth > vw + 1) issues.push("page scrolls horizontally (" + document.documentElement.scrollWidth + " > " + vw + ")");
   for (const el of document.querySelectorAll("#app *")) {
     if (!visible(el)) continue;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) continue;
-    if (r.right > vw + 1 || r.left < -1) issues.push(describe(el) + " sticks out horizontally (" + Math.round(r.left) + ".." + Math.round(r.right) + " of " + vw + ")");
+    if ((r.right > vw + 1 || r.left < -1) && !inScroller(el)) issues.push(describe(el) + " sticks out horizontally (" + Math.round(r.left) + ".." + Math.round(r.right) + " of " + vw + ")");
   }
-  for (const el of document.querySelectorAll(".tile-name, #footer-text, .row-label small, .row-label span, .select, #live-sub, #banner-text, .tile-sub, #setup-msg, .toast, .brand-name")) {
+  for (const el of document.querySelectorAll(".tile-name, #footer-text, .row-label small, .row-label span, .select, #live-sub, #banner-text, .tile-sub, #setup-msg, .toast, .brand-name, .sb-result-text b, .sb-result-text small")) {
     if (!visible(el)) continue;
     const cs = getComputedStyle(el);
     if (el.scrollWidth > el.clientWidth + 1 && cs.textOverflow !== "ellipsis" && cs.overflowX !== "visible") issues.push(describe(el) + " text is cut off without an ellipsis");
   }
-  for (const sel of ["#toast", "#menu"]) {
+  for (const sel of ["#toast", "#menu", "#sb-edit", "#sb-browse-sheet"]) {
     const el = document.querySelector(sel);
     if (el && visible(el)) {
       const r = el.getBoundingClientRect();
       if (r.top < 0 || r.bottom > vh + 1) issues.push(sel + " is outside the window vertically");
     }
   }
-  for (const id of ["main", "setup"]) {
+  for (const id of ["main", "setup", "soundboard"]) {
     const el = document.getElementById(id);
     if (el && visible(el) && el.scrollHeight > el.clientHeight + 1 && getComputedStyle(el).overflowY === "visible") issues.push("#" + id + " content is cut off (no scrolling)");
   }
@@ -188,7 +203,8 @@ try {
       const loaded = new Promise((resolve) => listeners.push(function onLoad(m) {
         if (m.method === "Page.loadEventFired") { listeners.splice(listeners.indexOf(onLoad), 1); resolve(); }
       }));
-      await call("Page.navigate", { url: `${base}?scenario=${c.scenario}&still` });
+      // The tab is always explicit: the UI remembers the last one in localStorage.
+      await call("Page.navigate", { url: `${base}?scenario=${c.scenario}&tab=${c.tab || "mic"}${c.query || ""}&still` });
       await loaded;
       if (c.apply) await evaluate(`${c.apply}; mock.push(); true`);
       if (c.after) await evaluate(`${c.after}; true`);
