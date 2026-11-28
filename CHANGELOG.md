@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Soundboard** tab: play short sounds into the microphone with a click or a
+  global hotkey, with or without a live app. Import your own files (MP3, WAV,
+  FLAC, M4A/AAC, WMA; drag & drop or **Add files**), or search and download
+  free public-domain (CC0) effects from Freesound and Wikimedia Commons via
+  Openverse, with preview and kept credits. Per-sound name, icon, colour,
+  volume and hotkey, a stop-all hotkey, and an optional monitor output so you
+  hear the sounds yourself. See ADR 0006.
+- Router: a second, clock-independent source. Sounds are mixed into the
+  captured app audio, or written by a paced pump thread while no app plays.
+
+### Changed
+- The app volume is applied before the ring (producer side) instead of by the
+  APO, so app and soundboard volumes are independent.
+
 ## [0.2.0-beta.2] - 2026-11-28
 
 Second public pre-release (**beta, not finished**): a real setup program
