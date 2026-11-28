@@ -48,7 +48,9 @@ std::wstring DescribeRouteError(HRESULT hr, const std::wstring& source) {
 }  // namespace
 
 AppController::AppController(std::wstring settings_path)
-    : settings_path_(std::move(settings_path)), settings_(core::LoadSettings(settings_path_)) {
+    : settings_path_(std::move(settings_path)),
+      settings_(core::LoadSettings(settings_path_)),
+      soundboard_(DefaultSoundboardDirectory(), router_) {
     // An empty source in an existing settings file means "all system audio";
     // without a settings file nothing is chosen yet (first run).
     if (FileExists(settings_path_)) {
@@ -90,6 +92,7 @@ void AppController::Tick(std::uint64_t now_ms) {
         next_status_ms_ = now_ms + kStatusIntervalMs;
     }
     UpdateRoute(now_ms);
+    soundboard_.Tick(now_ms);
 
     const float peak = router_.routing() ? router_.TakePeak() * settings_.inject_gain : 0.0f;
     level_ = std::max(std::min(peak, 1.0f), level_ * 0.55f);
@@ -383,6 +386,11 @@ std::wstring AppController::CachedFriendlyName(const std::wstring& image_path,
     std::wstring name = core::FriendlyAppName(image_path, executable);
     names_.emplace(image_path, name);
     return name;
+}
+
+bool AppController::mic_ready() const noexcept {
+    return injector_.endpoint_valid && injector_.install_state != installer::InstallState::NotInstalled &&
+           injector_.ring_available;
 }
 
 UiState AppController::BuildUiState() const {

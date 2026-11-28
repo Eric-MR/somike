@@ -30,8 +30,18 @@ add_library(somike_app_core STATIC
     app_controller.h
     app_state.cpp
     app_state.h
+    http_client.cpp
+    http_client.h
     icon_cache.cpp
     icon_cache.h
+    sound_catalog.cpp
+    sound_catalog.h
+    soundboard.cpp
+    soundboard.h
+    soundboard_library.cpp
+    soundboard_library.h
+    task_runner.cpp
+    task_runner.h
 )
 target_include_directories(somike_app_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(somike_app_core
@@ -39,9 +49,12 @@ target_link_libraries(somike_app_core
         somike::core
         nlohmann_json::nlohmann_json
     PRIVATE
+        somike::version
         crypt32
+        shell32
         shlwapi
         windowscodecs
+        winhttp
 )
 somike_configure_target(somike_app_core)
 
@@ -49,6 +62,8 @@ set(SOMIKE_UI_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/index.html
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/app.css
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/app.js
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/soundboard.css
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/soundboard.js
     ${CMAKE_CURRENT_SOURCE_DIR}/somike.ico
 )
 # The UI is embedded via the .rc file; rebuild it when a UI file changes.
@@ -59,6 +74,8 @@ add_executable(somike WIN32
     resource.h
     somike.manifest
     somike.rc
+    soundboard_bridge.cpp
+    soundboard_bridge.h
     web_window.cpp
     web_window.h
     ${SOMIKE_UI_FILES}

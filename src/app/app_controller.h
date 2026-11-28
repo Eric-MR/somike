@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "app_state.h"
+#include "soundboard.h"
 #include "somike/core/audio_devices.h"
 #include "somike/core/injector_status.h"
 #include "somike/core/router.h"
@@ -71,6 +72,10 @@ public:
     [[nodiscard]] LivePhase live_phase() const noexcept { return phase_; }
     [[nodiscard]] std::wstring selected_source_name() const;
     [[nodiscard]] const core::InjectorStatus& injector() const noexcept { return injector_; }
+    // Somike is set up on the selected microphone: routed audio and sounds reach it.
+    [[nodiscard]] bool mic_ready() const noexcept;
+
+    [[nodiscard]] Soundboard& soundboard() noexcept { return soundboard_; }
 
     [[nodiscard]] UiState BuildUiState() const;
     void SaveSettings();
@@ -95,6 +100,7 @@ private:
     core::Settings settings_;
     bool settings_dirty_ = false;
     core::Router router_;
+    Soundboard soundboard_;  // after router_: detaches from it before the router goes
 
     std::vector<SourceEntry> sources_;
     std::wstring source_id_;  // empty: nothing chosen yet (first run)

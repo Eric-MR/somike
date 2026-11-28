@@ -15,13 +15,20 @@ FetchContent_MakeAvailable(googletest)
 add_executable(somike_tests
     apo/apo_com_test.cpp
     app/app_state_test.cpp
+    app/sound_catalog_test.cpp
+    app/soundboard_library_test.cpp
     common/registry_codec_test.cpp
+    core/audio_file_test.cpp
     core/process_tree_test.cpp
     core/settings_test.cpp
+    dsp/canonical_convert_test.cpp
+    dsp/frame_pacer_test.cpp
     dsp/injector_test.cpp
     dsp/linear_resampler_test.cpp
     dsp/mixer_test.cpp
+    dsp/pump_scheduler_test.cpp
     dsp/ring_test.cpp
+    dsp/voice_mixer_test.cpp
     installer/endpoint_id_test.cpp
     installer/install_plan_test.cpp
     support/test_region.h
